@@ -1,12 +1,13 @@
 import React from 'react';
-import { useFileSystem } from '../context/FileSystemContext';
+import { useFileSystem } from '@/context/FileSystemContext';
 import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
-import { FileIcon } from './FileIcon';
+import { FileIcon } from '@/components/ui/FileIcon';
 
-export const Sidebar = () => {
-  const { files, activeFileId, isSidebarOpen, toggleFolder, openFile } = useFileSystem();
+export const Sidebar: React.FC = () => {
+  const { files, activeFileId, isSidebarOpen, toggleFolder, openFile } =
+    useFileSystem();
 
-  const renderTree = (nodeId, depth = 0) => {
+  const renderTree = (nodeId: string, depth = 0): React.ReactNode => {
     const node = files[nodeId];
     if (!node) return null;
 
@@ -21,11 +22,19 @@ export const Sidebar = () => {
             style={{ paddingLeft }}
             onClick={() => toggleFolder(nodeId)}
           >
-            {node.isOpen ? <ChevronDown size={14} className="mr-1" /> : <ChevronRight size={14} className="mr-1" />}
-            <Folder size={14} className={`mr-2 ${node.isOpen ? 'text-catppuccin-blue' : 'text-catppuccin-blue/70'}`} />
+            {node.isOpen ? (
+              <ChevronDown size={14} className="mr-1" />
+            ) : (
+              <ChevronRight size={14} className="mr-1" />
+            )}
+            <Folder
+              size={14}
+              className={`mr-2 ${node.isOpen ? 'text-catppuccin-blue' : 'text-catppuccin-blue/70'}`}
+            />
             <span className="text-sm font-medium">{node.name}</span>
           </div>
-          {node.isOpen && node.children.map(childId => renderTree(childId, depth + 1))}
+          {node.isOpen &&
+            node.children?.map((childId) => renderTree(childId, depth + 1))}
         </div>
       );
     } else {
@@ -33,7 +42,9 @@ export const Sidebar = () => {
         <div
           key={nodeId}
           className={`flex items-center py-1 cursor-pointer transition-colors ${isActive ? 'bg-catppuccin-surface0 text-white border-l-2 border-catppuccin-blue' : 'text-catppuccin-subtext0 hover:bg-catppuccin-surface0 hover:text-catppuccin-text'}`}
-          style={{ paddingLeft: isActive ? `${depth * 16 + 10}px` : paddingLeft }}
+          style={{
+            paddingLeft: isActive ? `${depth * 16 + 10}px` : paddingLeft,
+          }}
           onClick={() => openFile(nodeId)}
         >
           <div className="mr-2">
@@ -57,7 +68,7 @@ export const Sidebar = () => {
         <span className="text-catppuccin-overlay0 text-[10px]">v2.5.0</span>
       </div>
       <div className="overflow-y-auto h-[calc(100%-40px)] custom-scrollbar">
-        {renderTree("root")}
+        {renderTree('root')}
       </div>
     </div>
   );

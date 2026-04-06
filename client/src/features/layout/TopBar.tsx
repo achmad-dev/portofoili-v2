@@ -1,9 +1,9 @@
 import React from 'react';
-import { useFileSystem } from '../context/FileSystemContext';
+import { useFileSystem } from '@/context/FileSystemContext';
 import { Menu, X } from 'lucide-react';
-import { FileIcon } from './FileIcon';
+import { FileIcon } from '@/components/ui/FileIcon';
 
-export const TopBar = () => {
+export const TopBar: React.FC = () => {
   const {
     files,
     openFiles,
@@ -11,7 +11,7 @@ export const TopBar = () => {
     setActiveFileId,
     closeFile,
     isSidebarOpen,
-    setIsSidebarOpen
+    setIsSidebarOpen,
   } = useFileSystem();
 
   return (
@@ -23,8 +23,10 @@ export const TopBar = () => {
         <Menu size={16} />
       </button>
 
-      {openFiles.map(fileId => {
+      {openFiles.map((fileId) => {
         const file = files[fileId];
+        if (!file) return null;
+
         const isActive = activeFileId === fileId;
         return (
           <div
