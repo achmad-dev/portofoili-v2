@@ -1,9 +1,9 @@
 import React from 'react';
-import { FileSystemProvider } from './context/FileSystemContext';
-import { Sidebar } from './components/Sidebar';
-import { TopBar } from './components/TopBar';
-import { EditorArea } from './components/EditorArea';
-import { StatusLine } from './components/StatusLine';
+import { FileSystemProvider } from '@/context/FileSystemContext';
+import { Sidebar } from '@/features/explorer/Sidebar';
+import { TopBar } from '@/features/layout/TopBar';
+import { EditorArea } from '@/features/editor/EditorArea';
+import { StatusLine } from '@/features/layout/StatusLine';
 
 function App() {
   return (
