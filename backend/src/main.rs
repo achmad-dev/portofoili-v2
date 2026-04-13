@@ -2,11 +2,18 @@ use actix_web::{web, App, HttpServer, middleware::Logger, http::header};
 use actix_cors::Cors;
 use dotenvy::dotenv;
 use reqwest::Client;
+use std::sync::Arc;
 
 mod db;
-mod ai;
 mod error;
 mod presentation;
+mod domain;
+mod infrastructure;
+mod service;
+
+use infrastructure::gemini::GeminiProvider;
+use infrastructure::postgres::SupabaseRepository;
+use service::ai_service::AiService;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -21,6 +28,10 @@ async fn main() -> std::io::Result<()> {
 
     // Initialize HTTP client
     let client = Client::new();
+
+    let ai_provider = Arc::new(GeminiProvider::new(client));
+    let chat_repo = Arc::new(SupabaseRepository::new(pool));
+    let ai_service = Arc::new(AiService::new(ai_provider, chat_repo));
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
@@ -44,8 +55,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(Logger::default())
-            .app_data(web::Data::new(pool.clone()))
-            .app_data(web::Data::new(client.clone()))
+            .app_data(web::Data::new(ai_service.clone()))
             .configure(presentation::routes::config)
     })
     .bind(&bind_addr)?

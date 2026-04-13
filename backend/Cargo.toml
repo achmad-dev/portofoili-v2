@@ -23,6 +23,9 @@ hmac = "0.13.0"
 sha2 = "0.11.0"
 hex = "0.4.3"
 subtle = "2.6.1"
+async-trait = "0.1.89"
+mockall = "0.14.0"
 
 [dev-dependencies]
 actix-http = "3"
+mockall = "0.14.0"
