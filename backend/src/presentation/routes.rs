@@ -1,9 +1,15 @@
-use crate::presentation::handlers::{ai, health};
 use actix_web::web;
 
-/// Configure all application routes.
-/// This function is passed to `App::configure()` in main.rs.
-pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(health::hello)
-        .service(web::scope("/ai").service(ai::generate));
+pub fn config(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/api")
+            .service(
+                web::scope("/ai")
+                    .service(super::handlers::ai::generate)
+            )
+            .service(
+                web::scope("/health")
+                    .service(super::handlers::health::check)
+            )
+    );
 }

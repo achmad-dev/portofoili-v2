@@ -1,33 +1,24 @@
 export const callGemini = async (prompt: string): Promise<string> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-
-  if (!apiKey) {
-    // Mock response when no API key is provided
-    return `[Mock AI Response]\nThis is a simulated response since no API key is configured.\nYou asked: "${prompt}"`;
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }],
-  };
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(`${apiUrl}/ai/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ prompt }),
     });
 
-    if (!response.ok) throw new Error('Gemini API Error');
+    if (!response.ok) {
+      if (response.status === 429) {
+        return 'Rate limit exceeded. Try again tomorrow.';
+      }
+      throw new Error(`API Error: ${response.status}`);
+    }
 
     const data = await response.json();
-    return (
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      'No response generated.'
-    );
+    return data.content || 'No response generated.';
   } catch (error) {
-    console.error('Gemini Error:', error);
-    return 'Error: Could not connect to AI Copilot.';
+    console.error('Backend AI Error:', error);
+    return 'Error: Could not connect to the backend AI Copilot.';
   }
 };

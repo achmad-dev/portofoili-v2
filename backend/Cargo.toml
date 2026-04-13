@@ -13,6 +13,11 @@ dotenvy = "0.15"
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-rustls", "json", "uuid", "time", "chrono"] }
+uuid = { version = "1.23.0", features = ["v4", "serde"] }
+pgvector = { version = "0.4.1", features = ["sqlx"] }
+reqwest = { version = "0.13.2", features = ["json", "rustls"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 
 [dev-dependencies]
 actix-http = "3"
