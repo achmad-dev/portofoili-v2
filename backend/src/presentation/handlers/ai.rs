@@ -5,6 +5,7 @@ use reqwest::Client;
 use tracing::instrument;
 use crate::error::AppError;
 use crate::ai::{get_embedding, generate_content};
+use crate::presentation::extractors::HmacJson;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GenerateRequest {
@@ -34,7 +35,7 @@ pub async fn generate(
     req: HttpRequest,
     pool: web::Data<PgPool>,
     client: web::Data<Client>,
-    body: web::Json<GenerateRequest>,
+    body: HmacJson<GenerateRequest>,
 ) -> Result<impl Responder, AppError> {
     if body.prompt.trim().is_empty() {
         return Err(AppError::Validation("Prompt cannot be empty".to_string()));

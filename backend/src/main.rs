@@ -1,4 +1,5 @@
-use actix_web::{web, App, HttpServer, middleware::Logger};
+use actix_web::{web, App, HttpServer, middleware::Logger, http::header};
+use actix_cors::Cors;
 use dotenvy::dotenv;
 use reqwest::Client;
 
@@ -27,8 +28,21 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("Starting server at {}", bind_addr);
 
+    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allowed_origin(&frontend_url)
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![
+                header::CONTENT_TYPE,
+                header::HeaderName::from_static("x-signature"),
+                header::HeaderName::from_static("x-timestamp"),
+            ])
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .wrap(Logger::default())
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(client.clone()))

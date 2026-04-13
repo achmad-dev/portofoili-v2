@@ -41,6 +41,17 @@ def main():
         print(f"Failed to connect to database: {e}")
         exit(1)
 
+    # Execute schema to ensure tables exist
+    schema_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.sql")
+    try:
+        with open(schema_path, "r", encoding="utf-8") as schema_file:
+            cursor.execute(schema_file.read())
+            conn.commit()
+            print("Successfully verified/created database schema.")
+    except Exception as e:
+        print(f"Failed to execute schema.sql: {e}")
+        conn.rollback()
+
     # Make sure we're in the right directory relative to where the script is run
     base_dir = os.path.dirname(os.path.abspath(__file__))
     blog_path = os.path.normpath(os.path.join(base_dir, BLOG_DIR))
