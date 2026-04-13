@@ -1,0 +1,26 @@
+target/
+
+# Ignore IDE/editor-specific files
+.idea/
+.vscode/
+*.iml
+
+# Ignore Cargo debug and release builds
+debug/
+release/
+
+# Ignore temporary files
+*.rs.bk
+
+# Ignore DS_Store (macOS)
+.DS_Store
+
+# Ignore logs
+*.log
+
+# Ignore byproducts of tests
+*.profraw
+
+# ignoore env files
+.env
+.env.*
