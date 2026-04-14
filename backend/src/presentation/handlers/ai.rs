@@ -14,6 +14,12 @@ pub struct GenerateRequest {
     pub prompt: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PaginationQuery {
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+}
+
 #[derive(Debug, Serialize)]
 #[allow(dead_code)] pub struct GenerateResponse {
     pub content: String,
@@ -22,6 +28,20 @@ pub struct GenerateRequest {
 #[derive(Debug, Serialize)]
 #[allow(dead_code)] pub struct ErrorResponse {
     pub error: String,
+}
+
+#[actix_web::get("/messages")]
+#[instrument(skip(service))]
+pub async fn get_messages(
+    service: web::Data<Arc<AiService>>,
+    query: web::Query<PaginationQuery>,
+) -> Result<impl Responder, AppError> {
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 50);
+
+    let messages = service.get_messages(page, limit).await?;
+
+    Ok(HttpResponse::Ok().json(messages))
 }
 
 #[post("/generate")]
@@ -52,4 +72,20 @@ pub async fn generate(
     Ok(HttpResponse::Ok()
         .content_type("text/event-stream")
         .streaming(sse_stream))
+}
+
+#[actix_web::get("/messages/stream")]
+pub async fn stream_messages(service: web::Data<Arc<AiService>>) -> impl Responder {
+    let mut rx = service.subscribe();
+
+    let stream = async_stream::stream! {
+        while let Ok(event) = rx.recv().await {
+            let json_data = serde_json::to_string(&event).unwrap_or_else(|_| "{}".to_string());
+            yield Ok::<_, actix_web::Error>(Bytes::from(format!("data: {}\n\n", json_data)));
+        }
+    };
+
+    HttpResponse::Ok()
+        .content_type("text/event-stream")
+        .streaming(stream)
 }

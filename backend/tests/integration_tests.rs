@@ -76,3 +76,39 @@ async fn test_ai_generate_success_with_hmac() {
     assert!(full_body.contains("Response"));
     assert!(full_body.contains("Mocked AI response"));
 }
+
+#[actix_web::test]
+async fn test_get_messages_pagination() {
+    let mut mock_ai = MockAiProvider::new();
+    let mut mock_repo = MockChatRepository::new();
+
+    mock_repo.expect_get_paginated_chats().returning(|offset, limit| {
+        assert_eq!(offset, 10);
+        assert_eq!(limit, 10);
+        Ok(vec![
+            backend::domain::entities::ChatMessage {
+                user_prompt: "Page 2 message".to_string(),
+                ai_response: "Response 2".to_string(),
+            }
+        ])
+    });
+
+    let ai_service = Arc::new(AiService::new(Arc::new(mock_ai), Arc::new(mock_repo)));
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(ai_service.clone()))
+            .configure(config)
+    ).await;
+
+    let req = test::TestRequest::get().uri("/api/ai/messages?page=2&limit=10").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert!(resp.status().is_success());
+
+    let body_bytes = actix_web::test::read_body(resp).await;
+    let json_resp: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    assert!(json_resp.is_array());
+    assert_eq!(json_resp[0]["user_prompt"], "Page 2 message");
+}

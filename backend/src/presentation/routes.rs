@@ -6,6 +6,8 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .service(
                 web::scope("/ai")
                     .service(super::handlers::ai::generate)
+                    .service(super::handlers::ai::get_messages)
+                    .service(super::handlers::ai::stream_messages)
             )
             .service(
                 web::scope("/health")

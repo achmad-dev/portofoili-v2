@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { USER_CONFIG } from '@/config/user';
-import { streamGemini, AiEvent } from '@/utils/gemini';
+import { streamGemini, fetchMessages, subscribeToGlobalStream, AiEvent } from '@/utils/gemini';
 import { Bot, ChevronRight, Loader2 } from 'lucide-react';
 
 interface ChatMessage {
@@ -22,11 +22,103 @@ export const ChatBuffer: React.FC = () => {
     },
   ]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isFirstLoad = useRef(true);
 
+  // Initial fetch
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const loadInitialChats = async () => {
+      try {
+        const data = await fetchMessages(1, 10);
+        if (data.length < 10) setHasMore(false);
+
+        // Reverse because backend sends ORDER BY created_at DESC
+        const formatted: ChatMessage[] = data.reverse().flatMap((chat: any) => [
+          { role: 'user', text: chat.user_prompt },
+          { role: 'ai', text: chat.ai_response, thinking: [] }
+        ]);
+
+        setHistory(prev => [...prev, ...formatted]);
+        isFirstLoad.current = false;
+      } catch (e) {
+        console.error('Failed to load initial chats', e);
+      }
+    };
+    loadInitialChats();
+  }, []);
+
+  // Global Stream Subscription
+  useEffect(() => {
+    const sse = subscribeToGlobalStream((event) => {
+      // If we are currently loading, our local stream is handling it
+      // So we only append global events if we are NOT loading (someone else triggered it)
+      if (loading) return;
+
+      setHistory((prev) => {
+        const newHistory = [...prev];
+        let lastMsg = newHistory[newHistory.length - 1];
+
+        // If the last message is not an active AI message, create one
+        if (lastMsg.role !== 'ai' || (lastMsg.text.length > 0 && event.type === 'Thinking')) {
+           newHistory.push({ role: 'ai', text: '', thinking: [] });
+           lastMsg = newHistory[newHistory.length - 1];
+        }
+
+        if (event.type === 'Thinking') {
+          lastMsg.thinking = [...(lastMsg.thinking || []), event.content];
+        } else if (event.type === 'Response') {
+          lastMsg.text = event.content;
+        } else if (event.type === 'Error') {
+          lastMsg.text = event.content;
+        }
+
+        return newHistory;
+      });
+    });
+
+    return () => sse.close();
+  }, [loading]);
+
+  // Auto-scroll on new message
+  useEffect(() => {
+    // Only scroll to bottom if we are relatively close to it, or on first load
+    if (scrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      if (isNearBottom || isFirstLoad.current) {
+         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
   }, [history]);
+
+  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    if (e.currentTarget.scrollTop === 0 && hasMore) {
+      const nextPage = page + 1;
+      try {
+        const data = await fetchMessages(nextPage, 10);
+        if (data.length < 10) setHasMore(false);
+        if (data.length > 0) {
+          const formatted: ChatMessage[] = data.reverse().flatMap((chat: any) => [
+            { role: 'user', text: chat.user_prompt },
+            { role: 'ai', text: chat.ai_response, thinking: [] }
+          ]);
+
+          setHistory(prev => {
+            // Keep the system init message at index 0-1
+            const base = prev.slice(0, 2);
+            const rest = prev.slice(2);
+            return [...base, ...formatted, ...rest];
+          });
+          setPage(nextPage);
+        }
+      } catch (e) {
+        console.error('Failed to fetch more messages', e);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +156,11 @@ export const ChatBuffer: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full font-mono p-4">
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4 custom-scrollbar pr-2">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto space-y-4 pb-4 custom-scrollbar pr-2"
+      >
         {history.map((msg, i) => (
           <div
             key={i}

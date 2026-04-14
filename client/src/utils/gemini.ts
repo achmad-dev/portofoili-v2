@@ -22,6 +22,29 @@ export type AiEvent =
   | { type: 'Response', content: string }
   | { type: 'Error', content: string };
 
+export const fetchMessages = async (page: number, limit: number = 20) => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+  const response = await fetch(`${apiUrl}/ai/messages?page=${page}&limit=${limit}`);
+  if (!response.ok) throw new Error('Failed to fetch messages');
+  return response.json();
+};
+
+export const subscribeToGlobalStream = (onEvent: (event: AiEvent) => void): EventSource => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+  const eventSource = new EventSource(`${apiUrl}/ai/messages/stream`);
+
+  eventSource.onmessage = (e) => {
+    try {
+      const event: AiEvent = JSON.parse(e.data);
+      onEvent(event);
+    } catch (err) {
+      console.error('Failed to parse global SSE event:', err);
+    }
+  };
+
+  return eventSource;
+};
+
 export const streamGemini = async (
   prompt: string,
   onEvent: (event: AiEvent) => void

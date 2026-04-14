@@ -61,6 +61,18 @@ impl ChatRepository for SupabaseRepository {
         Ok(previous_chats.into_iter().map(|c| ChatMessage { user_prompt: c.0, ai_response: c.1 }).collect())
     }
 
+    async fn get_paginated_chats(&self, offset: i64, limit: i64) -> Result<Vec<ChatMessage>, AppError> {
+        let previous_chats: Vec<(String, String)> = sqlx::query_as(
+            "SELECT user_prompt, ai_response FROM chats ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(previous_chats.into_iter().map(|c| ChatMessage { user_prompt: c.0, ai_response: c.1 }).collect())
+    }
+
     async fn save_chat(&self, ip: &str, prompt: &str, response: &str) -> Result<(), AppError> {
         sqlx::query("INSERT INTO chats (ip_address, user_prompt, ai_response) VALUES ($1, $2, $3)")
             .bind(ip)
