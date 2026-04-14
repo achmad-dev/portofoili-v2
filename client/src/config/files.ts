@@ -1,7 +1,13 @@
-import { USER_CONFIG } from './user';
 import { FileSystemState } from '@/types';
 
-// We dynamically import markdown files using Vite's import.meta.glob
+// Load content markdown files (about.md, contact.md)
+const contentModules = import.meta.glob('@/content/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
+// Load blog markdown files
 const blogModules = import.meta.glob('@/content/blog/*.md', {
   query: '?raw',
   import: 'default',
@@ -26,6 +32,15 @@ const generateBlogFiles = () => {
   }
 
   return { blogFiles, blogFileIds };
+};
+
+const getContentFile = (filename: string): string => {
+  const key = Object.keys(contentModules).find((p) =>
+    p.endsWith(`/${filename}`)
+  );
+  return key
+    ? (contentModules[key] as string)
+    : `# ${filename}\n\nContent not found.`;
 };
 
 const { blogFiles, blogFileIds } = generateBlogFiles();
@@ -90,13 +105,13 @@ export const INITIAL_FILES: FileSystemState = {
     id: 'about.md',
     name: 'about.md',
     type: 'file',
-    content: `# About Me\n\nHi, I'm **${USER_CONFIG.name}**.\n\nI am a **${USER_CONFIG.role}** based in ${USER_CONFIG.location}.\n\n## Bio\n\n${USER_CONFIG.bio}\n\n## Core Stack\n\n- **Frontend**: ${USER_CONFIG.stack.frontend.join(', ')}\n- **Backend**: ${USER_CONFIG.stack.backend.join(', ')}\n\nType \`:q\` to exit (just kidding).`,
+    content: getContentFile('about.md'),
   },
   'contact.md': {
     id: 'contact.md',
     name: 'contact.md',
     type: 'file',
-    content: `# Contact\n\n- **Email**: ${USER_CONFIG.email}\n- **GitHub**: ${USER_CONFIG.github}\n- **Twitter**: ${USER_CONFIG.twitter}\n\n-- Send a pull request to my DMs.`,
+    content: getContentFile('contact.md'),
   },
   'web.json': {
     id: 'web.json',
@@ -136,7 +151,7 @@ export const INITIAL_FILES: FileSystemState = {
     id: 'stack.lua',
     name: 'stack.lua',
     type: 'file',
-    content: `local user = {\n  name = "${USER_CONFIG.name}",\n  role = "${USER_CONFIG.role}",\n  stack = {\n    frontend = { "${USER_CONFIG.stack.frontend.join('", "')}" },\n    backend = { "${USER_CONFIG.stack.backend.join('", "')}" },\n    tools = { "${USER_CONFIG.stack.tools.join('", "')}" }\n  }\n}\n\nreturn user`,
+    content: `local user = {\n  name = "Achmad Al Fazari",\n  role = "Full Stack Engineer",\n  stack = {\n    frontend = { "React", "TypeScript", "Tailwind", "Next.js" },\n    backend = { "Node.js", "Go", "PostgreSQL", "Supabase" },\n    tools = { "Neovim", "Tmux", "Docker", "Linux" }\n  }\n}\n\nreturn user`,
   },
   'terminal.sh': {
     id: 'terminal.sh',

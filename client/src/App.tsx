@@ -1,4 +1,3 @@
-import React from 'react';
 import { FileSystemProvider } from '@/context/FileSystemContext';
 import { Sidebar } from '@/features/explorer/Sidebar';
 import { TopBar } from '@/features/layout/TopBar';

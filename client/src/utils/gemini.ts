@@ -1,4 +1,8 @@
-const generateHmacSignature = async (timestamp: string, body: string, secret: string) => {
+const generateHmacSignature = async (
+  timestamp: string,
+  body: string,
+  secret: string
+) => {
   const enc = new TextEncoder();
   const key = await window.crypto.subtle.importKey(
     'raw',
@@ -9,7 +13,11 @@ const generateHmacSignature = async (timestamp: string, body: string, secret: st
   );
 
   const dataToSign = enc.encode(`${timestamp}.${body}`);
-  const signatureBuffer = await window.crypto.subtle.sign('HMAC', key, dataToSign);
+  const signatureBuffer = await window.crypto.subtle.sign(
+    'HMAC',
+    key,
+    dataToSign
+  );
 
   // Convert ArrayBuffer to Hex String
   return Array.from(new Uint8Array(signatureBuffer))
@@ -18,18 +26,22 @@ const generateHmacSignature = async (timestamp: string, body: string, secret: st
 };
 
 export type AiEvent =
-  | { type: 'Thinking', content: string }
-  | { type: 'Response', content: string }
-  | { type: 'Error', content: string };
+  | { type: 'Thinking'; content: string }
+  | { type: 'Response'; content: string }
+  | { type: 'Error'; content: string };
 
 export const fetchMessages = async (page: number, limit: number = 20) => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-  const response = await fetch(`${apiUrl}/ai/messages?page=${page}&limit=${limit}`);
+  const response = await fetch(
+    `${apiUrl}/ai/messages?page=${page}&limit=${limit}`
+  );
   if (!response.ok) throw new Error('Failed to fetch messages');
   return response.json();
 };
 
-export const subscribeToGlobalStream = (onEvent: (event: AiEvent) => void): EventSource => {
+export const subscribeToGlobalStream = (
+  onEvent: (event: AiEvent) => void
+): EventSource => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
   const eventSource = new EventSource(`${apiUrl}/ai/messages/stream`);
 
@@ -45,6 +57,26 @@ export const subscribeToGlobalStream = (onEvent: (event: AiEvent) => void): Even
   return eventSource;
 };
 
+export const callGemini = async (prompt: string): Promise<string> => {
+  return new Promise((resolve) => {
+    let fullResponse = '';
+
+    streamGemini(prompt, (event) => {
+      if (event.type === 'Response') {
+        fullResponse += event.content;
+      } else if (event.type === 'Error') {
+        resolve(event.content);
+      }
+    })
+      .then(() => {
+        resolve(fullResponse || 'No response generated.');
+      })
+      .catch(() => {
+        resolve('Could not connect to the backend AI Copilot.');
+      });
+  });
+};
+
 export const streamGemini = async (
   prompt: string,
   onEvent: (event: AiEvent) => void
@@ -55,21 +87,28 @@ export const streamGemini = async (
   try {
     const timestamp = Date.now().toString();
     const bodyStr = JSON.stringify({ prompt });
-    const signature = await generateHmacSignature(timestamp, bodyStr, hmacSecret);
+    const signature = await generateHmacSignature(
+      timestamp,
+      bodyStr,
+      hmacSecret
+    );
 
     const response = await fetch(`${apiUrl}/ai/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-timestamp': timestamp,
-        'x-signature': signature
+        'x-signature': signature,
       },
       body: bodyStr,
     });
 
     if (!response.ok) {
       if (response.status === 429) {
-        onEvent({ type: 'Error', content: 'Rate limit exceeded. Try again tomorrow.' });
+        onEvent({
+          type: 'Error',
+          content: 'Rate limit exceeded. Try again tomorrow.',
+        });
         return;
       }
       onEvent({ type: 'Error', content: `API Error: ${response.status}` });
@@ -107,6 +146,9 @@ export const streamGemini = async (
     }
   } catch (error) {
     console.error('Backend AI Error:', error);
-    onEvent({ type: 'Error', content: 'Could not connect to the backend AI Copilot.' });
+    onEvent({
+      type: 'Error',
+      content: 'Could not connect to the backend AI Copilot.',
+    });
   }
 };

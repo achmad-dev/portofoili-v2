@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { USER_CONFIG } from '@/config/user';
-import { streamGemini, fetchMessages, subscribeToGlobalStream, AiEvent } from '@/utils/gemini';
+import {
+  streamGemini,
+  fetchMessages,
+  subscribeToGlobalStream,
+  AiEvent,
+} from '@/utils/gemini';
 import { Bot, ChevronRight, Loader2 } from 'lucide-react';
 
 interface ChatMessage {
@@ -14,11 +18,11 @@ export const ChatBuffer: React.FC = () => {
   const [history, setHistory] = useState<ChatMessage[]>([
     {
       role: 'system',
-      text: `NvChad Copilot v1.0 initialized for user: ${USER_CONFIG.name}...`,
+      text: `NvChad Copilot v1.0 initialized for user: Guest...`,
     },
     {
       role: 'ai',
-      text: `Hello ${USER_CONFIG.name}! I am your portfolio assistant. Ask me about the code, the projects, or general Vim commands.`,
+      text: `Hello Guest I am your portfolio assistant. Ask me about this portfolio.`,
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -38,10 +42,10 @@ export const ChatBuffer: React.FC = () => {
         // Reverse because backend sends ORDER BY created_at DESC
         const formatted: ChatMessage[] = data.reverse().flatMap((chat: any) => [
           { role: 'user', text: chat.user_prompt },
-          { role: 'ai', text: chat.ai_response, thinking: [] }
+          { role: 'ai', text: chat.ai_response, thinking: [] },
         ]);
 
-        setHistory(prev => [...prev, ...formatted]);
+        setHistory((prev) => [...prev, ...formatted]);
         isFirstLoad.current = false;
       } catch (e) {
         console.error('Failed to load initial chats', e);
@@ -62,9 +66,12 @@ export const ChatBuffer: React.FC = () => {
         let lastMsg = newHistory[newHistory.length - 1];
 
         // If the last message is not an active AI message, create one
-        if (lastMsg.role !== 'ai' || (lastMsg.text.length > 0 && event.type === 'Thinking')) {
-           newHistory.push({ role: 'ai', text: '', thinking: [] });
-           lastMsg = newHistory[newHistory.length - 1];
+        if (
+          lastMsg.role !== 'ai' ||
+          (lastMsg.text.length > 0 && event.type === 'Thinking')
+        ) {
+          newHistory.push({ role: 'ai', text: '', thinking: [] });
+          lastMsg = newHistory[newHistory.length - 1];
         }
 
         if (event.type === 'Thinking') {
@@ -89,7 +96,7 @@ export const ChatBuffer: React.FC = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
       if (isNearBottom || isFirstLoad.current) {
-         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     }
   }, [history]);
@@ -101,12 +108,14 @@ export const ChatBuffer: React.FC = () => {
         const data = await fetchMessages(nextPage, 10);
         if (data.length < 10) setHasMore(false);
         if (data.length > 0) {
-          const formatted: ChatMessage[] = data.reverse().flatMap((chat: any) => [
-            { role: 'user', text: chat.user_prompt },
-            { role: 'ai', text: chat.ai_response, thinking: [] }
-          ]);
+          const formatted: ChatMessage[] = data
+            .reverse()
+            .flatMap((chat: any) => [
+              { role: 'user', text: chat.user_prompt },
+              { role: 'ai', text: chat.ai_response, thinking: [] },
+            ]);
 
-          setHistory(prev => {
+          setHistory((prev) => {
             // Keep the system init message at index 0-1
             const base = prev.slice(0, 2);
             const rest = prev.slice(2);
@@ -125,9 +134,13 @@ export const ChatBuffer: React.FC = () => {
     if (!input.trim() || loading) return;
 
     const userMsg: ChatMessage = { role: 'user', text: input };
-    const prompt = `You are a helpful AI assistant inside a developer's portfolio website that looks like Neovim. The user is named ${USER_CONFIG.name}. Be concise and technical. User asks: ${input}`;
+    const prompt = `${input}`;
 
-    setHistory((prev) => [...prev, userMsg, { role: 'ai', text: '', thinking: [] }]);
+    setHistory((prev) => [
+      ...prev,
+      userMsg,
+      { role: 'ai', text: '', thinking: [] },
+    ]);
     setInput('');
     setLoading(true);
 
@@ -184,8 +197,14 @@ export const ChatBuffer: React.FC = () => {
               {msg.thinking && msg.thinking.length > 0 && (
                 <div className="mb-2 space-y-1">
                   {msg.thinking.map((step, idx) => (
-                    <div key={idx} className="flex items-start text-xs text-catppuccin-overlay1 italic">
-                      <ChevronRight size={12} className="mt-[2px] mr-1 shrink-0" />
+                    <div
+                      key={idx}
+                      className="flex items-start text-xs text-catppuccin-overlay1 italic"
+                    >
+                      <ChevronRight
+                        size={12}
+                        className="mt-[2px] mr-1 shrink-0"
+                      />
                       <span>{step}</span>
                     </div>
                   ))}

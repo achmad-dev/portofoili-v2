@@ -51,8 +51,8 @@ export const TerminalBuffer: React.FC = () => {
 
     setHistory((prev) => [
       ...prev,
-      { type: 'input', text: `guest@portfolio:~$ ${cmd}` },
-      ...(response ? [{ type: 'output', text: response }] : []),
+      { type: 'input' as const, text: `guest@portfolio:~$ ${cmd}` },
+      ...(response ? [{ type: 'output' as const, text: response }] : []),
     ]);
   };
 
@@ -61,7 +61,7 @@ export const TerminalBuffer: React.FC = () => {
     if (!input && input.trim() === '') {
       setHistory((prev) => [
         ...prev,
-        { type: 'input', text: `guest@portfolio:~$ ` },
+        { type: 'input' as const, text: `guest@portfolio:~$ ` },
       ]);
       return;
     }
