@@ -1,19 +1,42 @@
+use actix_web::{HttpResponse, ResponseError};
+use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum AppError {
-    #[error("AI service error: {0}")]
-    AiService(String),
-
-    #[error("Validation error: {0}")]
+#[allow(dead_code)] pub enum AppError {
+    #[error("Validation Error: {0}")]
     Validation(String),
 
-    #[error("Internal server error: {0}")]
+    #[error("Internal Server Error: {0}")]
     Internal(String),
+
+    #[error("Database Error: {0}")]
+    Database(#[from] sqlx::Error),
+
+    #[error("Rate Limit Exceeded")]
+    RateLimit,
 }
 
-impl From<genai::Error> for AppError {
-    fn from(err: genai::Error) -> Self {
-        AppError::AiService(err.to_string())
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
+}
+
+impl ResponseError for AppError {
+    fn error_response(&self) -> HttpResponse {
+        match self {
+            AppError::Validation(msg) => HttpResponse::BadRequest().json(ErrorResponse {
+                error: msg.clone(),
+            }),
+            AppError::RateLimit => HttpResponse::TooManyRequests().json(ErrorResponse {
+                error: "Rate limit exceeded".to_string(),
+            }),
+            AppError::Database(_) | AppError::Internal(_) => {
+                tracing::error!("Internal error: {:?}", self);
+                HttpResponse::InternalServerError().json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                })
+            }
+        }
     }
 }

@@ -1,2 +1,1 @@
-mod ai_service;
-pub use ai_service::AiService;
+pub mod ai_service;

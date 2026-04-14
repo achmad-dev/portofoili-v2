@@ -1,44 +1,62 @@
+use actix_web::{web, App, HttpServer, middleware::Logger, http::header};
+use actix_cors::Cors;
+use dotenvy::dotenv;
+use reqwest::Client;
 use std::sync::Arc;
 
-use actix_web::{App, HttpServer, web};
-use tracing_subscriber::{EnvFilter, fmt};
+mod db;
+mod error;
+mod presentation;
+mod domain;
+mod infrastructure;
+mod service;
 
-use backend::config::AppConfig;
-use backend::infrastructure::gemini::GeminiService;
-use backend::presentation::routes;
-use backend::service::AiService;
+use infrastructure::gemini::GeminiProvider;
+use infrastructure::postgres::SupabaseRepository;
+use service::ai_service::AiService;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Load .env file if present (silently ignored if missing)
-    let _ = dotenvy::dotenv();
+    // Load environment variables
+    dotenv().ok();
 
-    // Initialise structured logging.
-    // Control verbosity with RUST_LOG=backend=debug,actix_web=info
-    fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive("backend=debug".parse().unwrap()),
-        )
-        .init();
+    // Initialize tracing
+    tracing_subscriber::fmt::init();
 
-    let config = AppConfig::from_env();
-    let bind_addr = format!("{}:{}", config.host, config.port);
+    // Initialize database pool
+    let pool = db::init_db().await;
 
-    tracing::info!("Starting server on {bind_addr}");
-    tracing::info!("Using Gemini model: {}", config.gemini_model);
+    // Initialize HTTP client
+    let client = Client::new();
 
-    // ── Composition Root ─────────────────────────────────────────────────────
-    // Infrastructure: concrete Gemini adapter (satisfies AiPort)
-    let gemini_provider = Arc::new(GeminiService::new(config.gemini_model.clone()));
+    let ai_provider = Arc::new(GeminiProvider::new(client));
+    let chat_repo = Arc::new(SupabaseRepository::new(pool));
+    let ai_service = Arc::new(AiService::new(ai_provider, chat_repo));
 
-    // Service layer: business logic wired with the provider
-    let ai_service = Arc::new(AiService::new(gemini_provider));
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let bind_addr = format!("{}:{}", host, port);
 
-    // ── HTTP Server ──────────────────────────────────────────────────────────
+    tracing::info!("Starting server at {}", bind_addr);
+
+    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allowed_origin(&frontend_url)
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![
+                header::CONTENT_TYPE,
+                header::HeaderName::from_static("x-signature"),
+                header::HeaderName::from_static("x-timestamp"),
+            ])
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
+            .wrap(Logger::default())
             .app_data(web::Data::new(ai_service.clone()))
-            .configure(routes::configure)
+            .configure(presentation::routes::config)
     })
     .bind(&bind_addr)?
     .run()
