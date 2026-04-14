@@ -6,6 +6,14 @@ pub struct ChatMessage {
     pub ai_response: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", content = "content")]
+pub enum AiEvent {
+    Thinking(String),
+    Response(String),
+    Error(String),
+}
+
 #[derive(Debug, Clone)]
 pub struct SimilarDocument {
     pub content: String,

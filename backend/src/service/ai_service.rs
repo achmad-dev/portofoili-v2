@@ -1,7 +1,7 @@
-use crate::domain::entities::LogEntry;
+use crate::domain::entities::{AiEvent, LogEntry};
 use crate::domain::ports::{AiProvider, ChatRepository};
-use crate::error::AppError;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 pub struct AiService {
     ai_provider: Arc<dyn AiProvider>,
@@ -13,39 +13,85 @@ impl AiService {
         Self { ai_provider, chat_repo }
     }
 
-    pub async fn generate_response(&self, ip: &str, prompt: String) -> Result<String, AppError> {
+    pub async fn generate_response(&self, ip: String, prompt: String, tx: mpsc::Sender<AiEvent>) {
         if prompt.trim().is_empty() {
-            return Err(AppError::Validation("Prompt cannot be empty".to_string()));
+            let _ = tx.send(AiEvent::Error("Prompt cannot be empty".to_string())).await;
+            return;
         }
+
+        let _ = tx.send(AiEvent::Thinking("Checking security rules and rate limits...".to_string())).await;
 
         // Rate Limits
-        if !self.chat_repo.check_ip_rate_limit(ip).await? {
-            return Err(AppError::RateLimit);
+        if let Ok(allowed) = self.chat_repo.check_ip_rate_limit(&ip).await {
+            if !allowed {
+                let _ = tx.send(AiEvent::Error("Rate limit exceeded".to_string())).await;
+                return;
+            }
+        } else {
+            let _ = tx.send(AiEvent::Error("Internal database error".to_string())).await;
+            return;
         }
 
-        if !self.chat_repo.check_global_rate_limit().await? {
-            return Err(AppError::RateLimit);
+        if let Ok(allowed) = self.chat_repo.check_global_rate_limit().await {
+            if !allowed {
+                let _ = tx.send(AiEvent::Error("Global rate limit exceeded".to_string())).await;
+                return;
+            }
+        } else {
+            let _ = tx.send(AiEvent::Error("Internal database error".to_string())).await;
+            return;
         }
 
         // Input Guardrail
-        if !self.ai_provider.evaluate_guardrail(&prompt).await? {
-            let _ = self.chat_repo.log_event(LogEntry {
-                level: "WARNING".to_string(),
-                event: "Input Guardrail Rejected".to_string(),
-                details: serde_json::json!({ "ip": ip, "prompt": prompt }),
-            }).await;
-            return Err(AppError::Validation("Input rejected by safety guidelines.".to_string()));
+        let _ = tx.send(AiEvent::Thinking("Evaluating input guardrails...".to_string())).await;
+        match self.ai_provider.evaluate_guardrail(&prompt).await {
+            Ok(true) => {}
+            Ok(false) => {
+                let _ = self.chat_repo.log_event(LogEntry {
+                    level: "WARNING".to_string(),
+                    event: "Input Guardrail Rejected".to_string(),
+                    details: serde_json::json!({ "ip": ip, "prompt": prompt }),
+                }).await;
+                let _ = tx.send(AiEvent::Error("Input rejected by safety guidelines.".to_string())).await;
+                return;
+            }
+            Err(_) => {
+                let _ = tx.send(AiEvent::Error("Failed to evaluate safety guidelines.".to_string())).await;
+                return;
+            }
         }
 
         // RAG Context
-        let query_embedding = self.ai_provider.get_embedding(&prompt).await?;
-        let similar_docs = self.chat_repo.get_similar_documents(query_embedding, 3).await?;
+        let _ = tx.send(AiEvent::Thinking("Embedding query and searching knowledge base...".to_string())).await;
+        let query_embedding = match self.ai_provider.get_embedding(&prompt).await {
+            Ok(emb) => emb,
+            Err(_) => {
+                let _ = tx.send(AiEvent::Error("Failed to generate embedding.".to_string())).await;
+                return;
+            }
+        };
+
+        let similar_docs = match self.chat_repo.get_similar_documents(query_embedding, 3).await {
+            Ok(docs) => docs,
+            Err(_) => {
+                let _ = tx.send(AiEvent::Error("Failed to search knowledge base.".to_string())).await;
+                return;
+            }
+        };
 
         let context_texts: Vec<String> = similar_docs.into_iter().map(|d| d.content).collect();
         let rag_context = context_texts.join("\n\n");
 
         // Memory Context
-        let previous_chats = self.chat_repo.get_recent_chats(5).await?;
+        let _ = tx.send(AiEvent::Thinking("Fetching global chat history...".to_string())).await;
+        let previous_chats = match self.chat_repo.get_recent_chats(5).await {
+            Ok(chats) => chats,
+            Err(_) => {
+                let _ = tx.send(AiEvent::Error("Failed to fetch chat history.".to_string())).await;
+                return;
+            }
+        };
+
         let memory_context = if previous_chats.is_empty() {
             "No previous chat history.".to_string()
         } else {
@@ -63,20 +109,39 @@ impl AiService {
         );
 
         // Generate AI Content
-        let response_text = self.ai_provider.generate_content(&final_prompt).await?;
+        let _ = tx.send(AiEvent::Thinking("Generating response...".to_string())).await;
+        let response_text = match self.ai_provider.generate_content(&final_prompt).await {
+            Ok(res) => res,
+            Err(_) => {
+                let _ = tx.send(AiEvent::Error("Failed to generate response.".to_string())).await;
+                return;
+            }
+        };
 
         // Output Guardrail
-        if !self.ai_provider.evaluate_guardrail(&response_text).await? {
-            let _ = self.chat_repo.log_event(LogEntry {
-                level: "WARNING".to_string(),
-                event: "Output Guardrail Rejected".to_string(),
-                details: serde_json::json!({ "ip": ip, "prompt": prompt, "response": response_text }),
-            }).await;
-            return Err(AppError::Internal("Generated response rejected by safety guidelines.".to_string()));
+        let _ = tx.send(AiEvent::Thinking("Verifying output safety...".to_string())).await;
+        match self.ai_provider.evaluate_guardrail(&response_text).await {
+            Ok(true) => {}
+            Ok(false) => {
+                let _ = self.chat_repo.log_event(LogEntry {
+                    level: "WARNING".to_string(),
+                    event: "Output Guardrail Rejected".to_string(),
+                    details: serde_json::json!({ "ip": ip, "prompt": prompt, "response": response_text }),
+                }).await;
+                let _ = tx.send(AiEvent::Error("Generated response rejected by safety guidelines.".to_string())).await;
+                return;
+            }
+            Err(_) => {
+                let _ = tx.send(AiEvent::Error("Failed to verify output safety.".to_string())).await;
+                return;
+            }
         }
 
         // Save Interaction
-        self.chat_repo.save_chat(ip, &prompt, &response_text).await?;
+        let _ = tx.send(AiEvent::Thinking("Saving session...".to_string())).await;
+        if self.chat_repo.save_chat(&ip, &prompt, &response_text).await.is_err() {
+            tracing::warn!("Failed to save chat interaction.");
+        }
 
         // Log Success
         let _ = self.chat_repo.log_event(LogEntry {
@@ -85,6 +150,6 @@ impl AiService {
             details: serde_json::json!({ "ip": ip, "prompt_length": prompt.len(), "response_length": response_text.len() }),
         }).await;
 
-        Ok(response_text)
+        let _ = tx.send(AiEvent::Response(response_text)).await;
     }
 }

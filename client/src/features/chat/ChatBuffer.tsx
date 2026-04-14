@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { USER_CONFIG } from '@/config/user';
-import { callGemini } from '@/utils/gemini';
-import { Bot } from 'lucide-react';
+import { streamGemini, AiEvent } from '@/utils/gemini';
+import { Bot, ChevronRight, Loader2 } from 'lucide-react';
 
 interface ChatMessage {
   role: 'system' | 'ai' | 'user';
   text: string;
+  thinking?: string[];
 }
 
 export const ChatBuffer: React.FC = () => {
@@ -29,19 +30,36 @@ export const ChatBuffer: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || loading) return;
 
     const userMsg: ChatMessage = { role: 'user', text: input };
-    setHistory((prev) => [...prev, userMsg]);
+    const prompt = `You are a helpful AI assistant inside a developer's portfolio website that looks like Neovim. The user is named ${USER_CONFIG.name}. Be concise and technical. User asks: ${input}`;
+
+    setHistory((prev) => [...prev, userMsg, { role: 'ai', text: '', thinking: [] }]);
     setInput('');
     setLoading(true);
 
-    const reply = await callGemini(
-      `You are a helpful AI assistant inside a developer's portfolio website that looks like Neovim. The user is named ${USER_CONFIG.name}. Be concise and technical. User asks: ${input}`
-    );
+    await streamGemini(prompt, (event: AiEvent) => {
+      setHistory((prev) => {
+        const newHistory = [...prev];
+        const lastMsg = newHistory[newHistory.length - 1];
 
-    setHistory((prev) => [...prev, { role: 'ai', text: reply }]);
-    setLoading(false);
+        if (lastMsg.role === 'ai') {
+          if (event.type === 'Thinking') {
+            lastMsg.thinking = [...(lastMsg.thinking || []), event.content];
+          } else if (event.type === 'Response') {
+            lastMsg.text = event.content;
+          } else if (event.type === 'Error') {
+            lastMsg.text = event.content;
+          }
+        }
+        return newHistory;
+      });
+
+      if (event.type === 'Response' || event.type === 'Error') {
+        setLoading(false);
+      }
+    });
   };
 
   return (
@@ -62,19 +80,32 @@ export const ChatBuffer: React.FC = () => {
               }`}
             >
               {msg.role === 'ai' && (
-                <div className="text-xs text-catppuccin-green font-bold mb-1 flex items-center gap-1">
+                <div className="text-xs text-catppuccin-green font-bold mb-2 flex items-center gap-1">
                   <Bot size={12} /> GEMINI
                 </div>
               )}
+
+              {msg.thinking && msg.thinking.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  {msg.thinking.map((step, idx) => (
+                    <div key={idx} className="flex items-start text-xs text-catppuccin-overlay1 italic">
+                      <ChevronRight size={12} className="mt-[2px] mr-1 shrink-0" />
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                  {loading && i === history.length - 1 && (
+                    <div className="flex items-center text-xs text-catppuccin-mauve italic mt-1 ml-4">
+                      <Loader2 size={10} className="animate-spin mr-1" />
+                      <span>thinking...</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="whitespace-pre-wrap">{msg.text}</div>
             </div>
           </div>
         ))}
-        {loading && (
-          <div className="text-catppuccin-mauve text-sm animate-pulse">
-            Copilot is thinking...
-          </div>
-        )}
         <div ref={bottomRef} />
       </div>
 
@@ -87,8 +118,9 @@ export const ChatBuffer: React.FC = () => {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask Copilot..."
-          className="flex-1 bg-transparent border-none outline-none text-catppuccin-text placeholder-catppuccin-overlay0 focus:ring-0"
+          disabled={loading}
+          placeholder={loading ? 'Copilot is thinking...' : 'Ask Copilot...'}
+          className="flex-1 bg-transparent border-none outline-none text-catppuccin-text placeholder-catppuccin-overlay0 focus:ring-0 disabled:opacity-50"
         />
       </form>
     </div>

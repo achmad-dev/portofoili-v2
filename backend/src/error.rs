@@ -3,7 +3,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum AppError {
+#[allow(dead_code)] pub enum AppError {
     #[error("Validation Error: {0}")]
     Validation(String),
 

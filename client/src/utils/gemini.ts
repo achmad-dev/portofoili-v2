@@ -17,7 +17,15 @@ const generateHmacSignature = async (timestamp: string, body: string, secret: st
     .join('');
 };
 
-export const callGemini = async (prompt: string): Promise<string> => {
+export type AiEvent =
+  | { type: 'Thinking', content: string }
+  | { type: 'Response', content: string }
+  | { type: 'Error', content: string };
+
+export const streamGemini = async (
+  prompt: string,
+  onEvent: (event: AiEvent) => void
+): Promise<void> => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
   const hmacSecret = import.meta.env.VITE_HMAC_SECRET || 'default_secret';
 
@@ -38,15 +46,44 @@ export const callGemini = async (prompt: string): Promise<string> => {
 
     if (!response.ok) {
       if (response.status === 429) {
-        return 'Rate limit exceeded. Try again tomorrow.';
+        onEvent({ type: 'Error', content: 'Rate limit exceeded. Try again tomorrow.' });
+        return;
       }
-      throw new Error(`API Error: ${response.status}`);
+      onEvent({ type: 'Error', content: `API Error: ${response.status}` });
+      return;
     }
 
-    const data = await response.json();
-    return data.content || 'No response generated.';
+    if (!response.body) {
+      onEvent({ type: 'Error', content: 'No readable stream available.' });
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event: AiEvent = JSON.parse(jsonStr);
+            onEvent(event);
+          } catch (e) {
+            console.error('Failed to parse SSE JSON:', jsonStr, e);
+          }
+        }
+      }
+    }
   } catch (error) {
     console.error('Backend AI Error:', error);
-    return 'Error: Could not connect to the backend AI Copilot.';
+    onEvent({ type: 'Error', content: 'Could not connect to the backend AI Copilot.' });
   }
 };

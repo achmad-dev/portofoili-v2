@@ -64,7 +64,15 @@ async fn test_ai_generate_success_with_hmac() {
         .set_payload(body)
         .to_request();
 
-    let resp = test::call_service(&app, req).await;
+    let mut resp = test::call_service(&app, req).await;
 
     assert!(resp.status().is_success());
+    assert_eq!(resp.headers().get("content-type").unwrap().to_str().unwrap(), "text/event-stream");
+
+    let body_bytes = actix_web::test::read_body(resp).await;
+    let full_body = std::str::from_utf8(&body_bytes).unwrap().to_string();
+
+    assert!(full_body.contains("Thinking"));
+    assert!(full_body.contains("Response"));
+    assert!(full_body.contains("Mocked AI response"));
 }
