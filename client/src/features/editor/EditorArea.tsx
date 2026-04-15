@@ -1,7 +1,6 @@
-import React, { useState, Suspense } from 'react';
+import React, { Suspense } from 'react';
 import { useFileSystem } from '@/context/FileSystemContext';
-import { callGemini } from '@/utils/gemini';
-import { Sparkles, Terminal } from 'lucide-react';
+import { Terminal } from 'lucide-react';
 import { CodeHighlighter } from './CodeHighlighter';
 
 // Lazy load feature buffers for performance
@@ -18,19 +17,6 @@ const TerminalBuffer = React.lazy(() =>
 
 export const EditorArea: React.FC = () => {
   const { files, activeFileId, getFileType } = useFileSystem();
-  const [analyzing, setAnalyzing] = useState(false);
-
-  const handleAnalyzeBuffer = async () => {
-    if (!activeFileId || !files[activeFileId]?.content) return;
-
-    setAnalyzing(true);
-    const content = files[activeFileId].content;
-    const result = await callGemini(
-      `Analyze this file content and explain what it does concisely for a developer portfolio context: \n\n${content}`
-    );
-    alert(`✨ GEMINI ANALYSIS:\n\n${result}`);
-    setAnalyzing(false);
-  };
 
   return (
     <div className="flex-1 flex flex-col bg-catppuccin-base relative w-full h-full min-w-0">
@@ -42,18 +28,6 @@ export const EditorArea: React.FC = () => {
               ? 'cybersecurity > terminal'
               : `portfolio > ${files[activeFileId].name}`}
           </div>
-
-          {/* Context Actions */}
-          {files[activeFileId].type === 'file' && (
-            <button
-              onClick={handleAnalyzeBuffer}
-              disabled={analyzing}
-              className="flex items-center gap-1.5 hover:text-catppuccin-mauve transition-colors disabled:opacity-50"
-            >
-              <Sparkles size={12} />
-              {analyzing ? 'Analyzing...' : 'Analyze Buffer'}
-            </button>
-          )}
         </div>
       )}
 

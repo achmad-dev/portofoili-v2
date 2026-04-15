@@ -25,7 +25,12 @@ impl ChatRepository for SupabaseRepository {
             .fetch_one(&self.pool)
             .await?;
 
-        Ok(count.0 < 1 || ip == "127.0.0.1" || ip == "localhost")
+        // We should enforce the limit even for localhost/127.0.0.1 if deployed online behind a proxy,
+        // but if it's strictly local development we might want to bypass it.
+        // However, the issue explicitly mentioned that IP/global restrictions are not working.
+        // Since we extract the real IP from X-Forwarded-For now, we can remove the localhost bypass.
+        // The user wants 1 request per day per IP.
+        Ok(count.0 < 1)
     }
 
     async fn check_global_rate_limit(&self) -> Result<bool, AppError> {

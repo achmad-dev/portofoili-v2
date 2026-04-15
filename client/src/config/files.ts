@@ -7,6 +7,13 @@ const contentModules = import.meta.glob('@/content/*.md', {
   eager: true,
 });
 
+// Load algorithm markdown files
+const algorithmModules = import.meta.glob('@/content/algorithms/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
 // Load blog markdown files
 const blogModules = import.meta.glob('@/content/blog/*.md', {
   query: '?raw',
@@ -14,24 +21,31 @@ const blogModules = import.meta.glob('@/content/blog/*.md', {
   eager: true,
 });
 
-const generateBlogFiles = () => {
-  const blogFiles: FileSystemState = {};
-  const blogFileIds: string[] = [];
+// Load project markdown files
+const projectModules = import.meta.glob('@/content/projects/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
 
-  for (const path in blogModules) {
+const generateMarkdownFiles = (modules: Record<string, unknown>) => {
+  const files: FileSystemState = {};
+  const fileIds: string[] = [];
+
+  for (const path in modules) {
     const filename = path.split('/').pop() as string;
-    const content = blogModules[path] as string;
+    const content = modules[path] as string;
 
-    blogFiles[filename] = {
+    files[filename] = {
       id: filename,
       name: filename,
       type: 'file',
       content: content,
     };
-    blogFileIds.push(filename);
+    fileIds.push(filename);
   }
 
-  return { blogFiles, blogFileIds };
+  return { files, fileIds };
 };
 
 const getContentFile = (filename: string): string => {
@@ -43,7 +57,9 @@ const getContentFile = (filename: string): string => {
     : `# ${filename}\n\nContent not found.`;
 };
 
-const { blogFiles, blogFileIds } = generateBlogFiles();
+const { files: blogFiles, fileIds: blogFileIds } = generateMarkdownFiles(blogModules);
+const { files: projectFiles, fileIds: projectFileIds } = generateMarkdownFiles(projectModules);
+const { files: algorithmFiles, fileIds: algorithmFileIds } = generateMarkdownFiles(algorithmModules);
 
 export const INITIAL_FILES: FileSystemState = {
   root: {
@@ -54,6 +70,7 @@ export const INITIAL_FILES: FileSystemState = {
     children: [
       'content',
       'projects',
+      'algorithms',
       'blog',
       'cybersecurity',
       'config',
@@ -72,7 +89,14 @@ export const INITIAL_FILES: FileSystemState = {
     name: 'projects',
     type: 'folder',
     isOpen: false,
-    children: ['web.json', 'systems.json'],
+    children: projectFileIds,
+  },
+  algorithms: {
+    id: 'algorithms',
+    name: 'algorithms',
+    type: 'folder',
+    isOpen: false,
+    children: algorithmFileIds,
   },
   blog: {
     id: 'blog',
@@ -93,7 +117,7 @@ export const INITIAL_FILES: FileSystemState = {
     name: 'config',
     type: 'folder',
     isOpen: false,
-    children: ['stack.lua'],
+    children: ['config.lua'],
   },
   'copilot.chat': {
     id: 'copilot.chat',
@@ -113,45 +137,11 @@ export const INITIAL_FILES: FileSystemState = {
     type: 'file',
     content: getContentFile('contact.md'),
   },
-  'web.json': {
-    id: 'web.json',
-    name: 'web.json',
+  'config.lua': {
+    id: 'config.lua',
+    name: 'config.lua',
     type: 'file',
-    content: JSON.stringify(
-      [
-        {
-          name: 'E-Commerce Dashboard',
-          stack: ['React', 'Tailwind', 'Supabase'],
-          status: 'Live',
-        },
-        { name: 'Portfolio v1', stack: ['HTML', 'SASS'], status: 'Archived' },
-      ],
-      null,
-      2
-    ),
-  },
-  'systems.json': {
-    id: 'systems.json',
-    name: 'systems.json',
-    type: 'file',
-    content: JSON.stringify(
-      [
-        {
-          name: 'Rust File Parser',
-          stack: ['Rust', 'Clap'],
-          status: 'In Progress',
-        },
-        { name: 'Go CLI Tool', stack: ['Go'], status: 'Completed' },
-      ],
-      null,
-      2
-    ),
-  },
-  'stack.lua': {
-    id: 'stack.lua',
-    name: 'stack.lua',
-    type: 'file',
-    content: `local user = {\n  name = "Achmad Al Fazari",\n  role = "Full Stack Engineer",\n  stack = {\n    frontend = { "React", "TypeScript", "Tailwind", "Next.js" },\n    backend = { "Node.js", "Go", "PostgreSQL", "Supabase" },\n    tools = { "Neovim", "Tmux", "Docker", "Linux" }\n  }\n}\n\nreturn user`,
+    content: `local theme = {\n  name = "NvChad Catppuccin",\n  colors = {\n    base = "#1e1e2e",\n    mantle = "#181825",\n    crust = "#11111b",\n    text = "#cdd6f4",\n    mauve = "#cba6f7",\n    pink = "#f5c2e7",\n    red = "#f38ba8",\n    peach = "#fab387",\n    green = "#a6e3a1",\n    blue = "#89b4fa",\n  },\n  font = "JetBrains Mono Nerd Font",\n}\n\nreturn theme`,
   },
   'terminal.sh': {
     id: 'terminal.sh',
@@ -160,4 +150,6 @@ export const INITIAL_FILES: FileSystemState = {
     content: 'TERMINAL_VIEW',
   },
   ...blogFiles,
+  ...projectFiles,
+  ...algorithmFiles,
 };

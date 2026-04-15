@@ -51,7 +51,17 @@ pub async fn generate(
     service: web::Data<Arc<AiService>>,
     body: HmacJson<GenerateRequest>,
 ) -> Result<impl Responder, AppError> {
-    let ip = req.connection_info().realip_remote_addr().unwrap_or("unknown").to_string();
+    let mut ip = req.connection_info().realip_remote_addr().unwrap_or("unknown").to_string();
+
+    // Attempt to get IP from X-Forwarded-For if deployed behind a proxy
+    if let Some(forwarded_for) = req.headers().get("X-Forwarded-For") {
+        if let Ok(forwarded_str) = forwarded_for.to_str() {
+            // X-Forwarded-For can contain multiple IPs, the first one is the client
+            if let Some(first_ip) = forwarded_str.split(',').next() {
+                ip = first_ip.trim().to_string();
+            }
+        }
+    }
 
     let (tx, rx) = mpsc::channel(100);
     let prompt = body.prompt.clone();
