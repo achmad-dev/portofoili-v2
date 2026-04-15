@@ -57,15 +57,24 @@ export const ChatBuffer: React.FC = () => {
   // Global Stream Subscription
   useEffect(() => {
     const sse = subscribeToGlobalStream((event) => {
-      // If we are currently loading, our local stream is handling it
-      // So we only append global events if we are NOT loading (someone else triggered it)
-      if (loading) return;
-
+      // We no longer rely on the global stream to append messages if we are the one initiating the prompt.
+      // However, if we aren't loading, it means another client might be generating a response.
+      // Wait, since this is a global broadcast, we could just let the global stream handle EVERYTHING
+      // and NOT have `streamGemini` update the UI in `handleSubmit`.
+      // BUT `streamGemini` is the one making the HTTP POST request.
+      // To prevent duplicates simply: if we are loading, we ignore global stream events, because
+      // the local `streamGemini` callback is already updating our local state.
       setHistory((prev) => {
+        // Only ignore if the LAST message is an active AI message that we are currently writing to,
+        // and we are currently loading.
+        if (loading) return prev;
+
         const newHistory = [...prev];
         let lastMsg = newHistory[newHistory.length - 1];
 
         // If the last message is not an active AI message, create one
+        // Also if we receive a Thinking event and the last message already has text,
+        // it means this is a brand new generation cycle from another client.
         if (
           lastMsg.role !== 'ai' ||
           (lastMsg.text.length > 0 && event.type === 'Thinking')
@@ -119,9 +128,17 @@ export const ChatBuffer: React.FC = () => {
             // Keep the system init message at index 0-1
             const base = prev.slice(0, 2);
             const rest = prev.slice(2);
+
+            // To maintain correct chronological order:
+            // older messages should be pushed immediately after the base system messages.
             return [...base, ...formatted, ...rest];
           });
           setPage(nextPage);
+
+          // Adjust scroll position so the user doesn't jump back to the absolute top
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = 100; // Small offset to prevent immediate re-trigger
+          }
         }
       } catch (e) {
         console.error('Failed to fetch more messages', e);
