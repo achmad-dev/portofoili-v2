@@ -55,6 +55,17 @@ def main():
         print(f"Failed to execute schema.sql: {e}")
         conn.rollback()
 
+    # Clear all existing documents before re-parsing
+    print("Clearing existing document embeddings...")
+    try:
+        cursor.execute("TRUNCATE TABLE documents RESTART IDENTITY")
+        conn.commit()
+        print("Successfully cleared all existing documents.")
+    except Exception as e:
+        print(f"Failed to clear existing documents: {e}")
+        conn.rollback()
+        exit(1)
+
     # Resolve content directory relative to script location
     base_dir = os.path.dirname(os.path.abspath(__file__))
     content_path = os.path.normpath(os.path.join(base_dir, CONTENT_DIR))

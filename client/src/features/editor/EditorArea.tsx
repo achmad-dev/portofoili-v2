@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { useFileSystem } from '@/context/FileSystemContext';
 import { Terminal } from 'lucide-react';
 import { CodeHighlighter } from './CodeHighlighter';
+import { MarkdownViewer } from './MarkdownViewer';
 
 // Lazy load feature buffers for performance
 const ChatBuffer = React.lazy(() =>
@@ -48,6 +49,10 @@ export const EditorArea: React.FC = () => {
             ) : files[activeFileId].type === 'chat' ? (
               <div className="absolute inset-0">
                 <ChatBuffer />
+              </div>
+            ) : files[activeFileId].name.endsWith('.md') ? (
+              <div className="p-4 md:p-8 min-h-full flex justify-center">
+                <MarkdownViewer content={files[activeFileId].content} />
               </div>
             ) : (
               <div className="p-2 md:p-4 min-h-full pb-20">
