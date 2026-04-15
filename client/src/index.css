@@ -10,6 +10,26 @@
   }
 }
 
+/* Tailwind Typography Overrides for Catppuccin */
+.prose-catppuccin {
+  --tw-prose-body: #cdd6f4;
+  --tw-prose-headings: #cba6f7;
+  --tw-prose-lead: #bac2de;
+  --tw-prose-links: #89b4fa;
+  --tw-prose-bold: #f38ba8;
+  --tw-prose-counters: #a6adc8;
+  --tw-prose-bullets: #a6adc8;
+  --tw-prose-hr: #45475a;
+  --tw-prose-quotes: #bac2de;
+  --tw-prose-quote-borders: #cba6f7;
+  --tw-prose-captions: #a6adc8;
+  --tw-prose-code: #f5c2e7;
+  --tw-prose-pre-code: #cdd6f4;
+  --tw-prose-pre-bg: #1e1e2e;
+  --tw-prose-th-borders: #585b70;
+  --tw-prose-td-borders: #45475a;
+}
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 10px;
