@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::presentation::extractors::HmacJson;
+use crate::presentation::extractors::{HmacJson, HmacQuery};
 use crate::service::ai_service::AiService;
 use actix_web::{HttpRequest, HttpResponse, Responder, post, web};
 use bytes::Bytes;
@@ -36,7 +36,7 @@ pub struct ErrorResponse {
 #[instrument(skip(service))]
 pub async fn get_messages(
     service: web::Data<Arc<AiService>>,
-    query: web::Query<PaginationQuery>,
+    query: HmacQuery<PaginationQuery>,
 ) -> Result<impl Responder, AppError> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.unwrap_or(20).clamp(1, 50);
@@ -91,8 +91,16 @@ pub async fn generate(
         .streaming(sse_stream))
 }
 
+// Phantom wrapper so HmacQuery has a concrete type to deserialize into.
+// The stream endpoint carries no real query params beyond the HMAC fields.
+#[derive(Debug, serde::Deserialize)]
+pub struct NoParams {}
+
 #[actix_web::get("/messages/stream")]
-pub async fn stream_messages(service: web::Data<Arc<AiService>>) -> impl Responder {
+pub async fn stream_messages(
+    service: web::Data<Arc<AiService>>,
+    _auth: HmacQuery<NoParams>,
+) -> impl Responder {
     let mut rx = service.subscribe();
 
     let stream = async_stream::stream! {

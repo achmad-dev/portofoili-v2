@@ -78,7 +78,9 @@ export const ChatBuffer: React.FC = () => {
 
   // ── Global SSE subscription (other clients) ───────────────────────────────
   useEffect(() => {
-    const sse = subscribeToGlobalStream((event: AiEvent) => {
+    let sseRef: EventSource | null = null;
+
+    subscribeToGlobalStream((event: AiEvent) => {
       // Skip if this client is the one generating
       if (isGeneratingRef.current) return;
 
@@ -105,9 +107,11 @@ export const ChatBuffer: React.FC = () => {
 
         return newHistory;
       });
+    }).then((sse) => {
+      sseRef = sse;
     });
 
-    return () => sse.close();
+    return () => sseRef?.close();
   }, []);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────

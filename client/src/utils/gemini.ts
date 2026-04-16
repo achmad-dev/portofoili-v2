@@ -32,18 +32,32 @@ export type AiEvent =
 
 export const fetchMessages = async (page: number, limit: number = 20) => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-  const response = await fetch(
-    `${apiUrl}/ai/messages?page=${page}&limit=${limit}`
-  );
+  const hmacSecret = import.meta.env.VITE_HMAC_SECRET || 'default_secret';
+  const timestamp = Date.now().toString();
+
+  // Canonical query (sorted alphabetically, no HMAC fields)
+  // Must match the BTreeMap ordering on the backend
+  const canonical = `limit=${limit}&page=${page}`;
+  const signature = await generateHmacSignature(timestamp, canonical, hmacSecret);
+
+  const url = `${apiUrl}/ai/messages?limit=${limit}&page=${page}&x_timestamp=${timestamp}&x_signature=${signature}`;
+  const response = await fetch(url);
   if (!response.ok) throw new Error('Failed to fetch messages');
   return response.json();
 };
 
-export const subscribeToGlobalStream = (
+export const subscribeToGlobalStream = async (
   onEvent: (event: AiEvent) => void
-): EventSource => {
+): Promise<EventSource> => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-  const eventSource = new EventSource(`${apiUrl}/ai/messages/stream`);
+  const hmacSecret = import.meta.env.VITE_HMAC_SECRET || 'default_secret';
+  const timestamp = Date.now().toString();
+
+  // No real params on this endpoint, so canonical is empty string
+  const signature = await generateHmacSignature(timestamp, '', hmacSecret);
+
+  const url = `${apiUrl}/ai/messages/stream?x_timestamp=${timestamp}&x_signature=${signature}`;
+  const eventSource = new EventSource(url);
 
   eventSource.onmessage = (e) => {
     try {

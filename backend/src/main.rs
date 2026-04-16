@@ -65,8 +65,11 @@ async fn main() -> std::io::Result<()> {
             .allowed_methods(vec!["GET", "POST"])
             .allowed_headers(vec![
                 header::CONTENT_TYPE,
+                // POST /generate: HMAC travels in these headers
                 header::HeaderName::from_static("x-signature"),
                 header::HeaderName::from_static("x-timestamp"),
+                // GET endpoints / EventSource: HMAC travels as query params,
+                // so no extra headers needed here for those routes.
             ])
             .max_age(3600);
 
