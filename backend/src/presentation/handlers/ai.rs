@@ -1,13 +1,13 @@
-use actix_web::{HttpResponse, Responder, post, web, HttpRequest};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tracing::instrument;
-use tokio::sync::mpsc;
-use bytes::Bytes;
 use crate::error::AppError;
 use crate::presentation::extractors::HmacJson;
 use crate::service::ai_service::AiService;
+use actix_web::{HttpRequest, HttpResponse, Responder, post, web};
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::instrument;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GenerateRequest {
@@ -21,12 +21,14 @@ pub struct PaginationQuery {
 }
 
 #[derive(Debug, Serialize)]
-#[allow(dead_code)] pub struct GenerateResponse {
+#[allow(dead_code)]
+pub struct GenerateResponse {
     pub content: String,
 }
 
 #[derive(Debug, Serialize)]
-#[allow(dead_code)] pub struct ErrorResponse {
+#[allow(dead_code)]
+pub struct ErrorResponse {
     pub error: String,
 }
 
@@ -44,6 +46,7 @@ pub async fn get_messages(
     Ok(HttpResponse::Ok().json(messages))
 }
 
+// This endpoint is designed to handle long-running AI response generation and stream results back to the client in real-time using Server-Sent Events (SSE).
 #[post("/generate")]
 #[instrument(skip(service))]
 pub async fn generate(
@@ -51,7 +54,11 @@ pub async fn generate(
     service: web::Data<Arc<AiService>>,
     body: HmacJson<GenerateRequest>,
 ) -> Result<impl Responder, AppError> {
-    let mut ip = req.connection_info().realip_remote_addr().unwrap_or("unknown").to_string();
+    let mut ip = req
+        .connection_info()
+        .realip_remote_addr()
+        .unwrap_or("unknown")
+        .to_string();
 
     // Attempt to get IP from X-Forwarded-For if deployed behind a proxy
     if let Some(forwarded_for) = req.headers().get("X-Forwarded-For") {
