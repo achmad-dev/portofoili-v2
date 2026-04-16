@@ -23,15 +23,34 @@ I care deeply about the craft — from designing intuitive APIs to shipping poli
 - React, TypeScript, Tailwind CSS, Next.js, Html, css
 
 ### Backend
-- Node.js, Go, Rust, PostgreSQL, Supabase, MySql, Rabbitmq, Kafka
+- Go, Node.js, Rust
+- PostgreSQL, MySQL, Redis
+- RabbitMQ, Kafka
+- REST, gRPC, WebSocket
 
-### Tools & Workflow
-- Neovim, Docker, Linux, Kubernetes, Localstack, minikube, terraform, pulumi
+### Infrastructure & DevOps
+- Linux, Docker, Kubernetes, Minikube
+- Terraform, Pulumi, Localstack
+- CI/CD: GitHub Actions, Railway
+
+### Observability
+- Grafana, Prometheus, Loki
+- Distributed tracing, structured logging, alerting pipelines
+
+### Security Tooling
+- **SIEM / Threat Detection**: Wazuh (agent-based monitoring, FIM, log analysis)
+- **Web App Security**: OWASP ZAP (automated DAST scanning), Burp Suite
+- **Network Recon & Analysis**: Nmap, Wireshark, Netcat
+- **Vulnerability Assessment**: Trivy (container scanning), Nikto, Nuclei
+- **Hardening References**: OWASP Top 10, CIS Benchmarks, CVE tracking
+
+### Frontend (when needed)
+- React, TypeScript, Tailwind CSS, Next.js
 
 ## A Bit More
 
-When I'm not writing code, I'm probably reading about systems design, tinkering with my Neovim config, or exploring new tools that make development faster and more enjoyable.
+When I'm not writing code, I'm probably reading about systems design, setting up a new homelab service, or digging into a CVE that looks interesting.
 
-I thrive in environments where quality matters — teams that care about clean architecture, good documentation, and shipping things that actually work.
+I thrive in environments where reliability and security aren't afterthoughts — teams that write runbooks, own their on-call, and actually fix the root cause.
 
 > Type `:q` to exit (just kidding).
