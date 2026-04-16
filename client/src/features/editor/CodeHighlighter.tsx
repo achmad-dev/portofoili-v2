@@ -1,5 +1,6 @@
 import React from 'react';
 
+// Simple syntax highlighter for markdown, JSON, and Lua using Tailwind CSS and Catppuccin theme colors.
 interface CodeHighlighterProps {
   text?: string;
   type: string;
