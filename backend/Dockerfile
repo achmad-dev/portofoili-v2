@@ -1,13 +1,21 @@
 FROM rust:1.80-slim AS builder
 
 WORKDIR /usr/src/app
+
+# Only need basic build tools since you're using rustls (no OpenSSL)
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY . .
 
 RUN cargo build --release
 
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/src/app/target/release/backend /usr/local/bin/backend
 COPY --from=builder /usr/src/app/migrations /migrations
