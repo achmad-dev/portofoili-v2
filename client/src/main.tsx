@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import App from './App';
 
+// Create a QueryClient with default options for caching and retry behavior.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
