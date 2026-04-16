@@ -5,6 +5,7 @@ interface TerminalLine {
   text: string;
 }
 
+// Simulated terminal buffer component with basic command handling
 export const TerminalBuffer: React.FC = () => {
   const [history, setHistory] = useState<TerminalLine[]>([
     { type: 'system', text: 'Welcome to NvChad Terminal' },
