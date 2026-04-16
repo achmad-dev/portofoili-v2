@@ -1,56 +1,62 @@
 # About Me
 
-Hi, I'm **Achmad Al Fazari** — a Full Stack Engineer based in Indonesia.
+Hi, I'm **Achmad Al Fazari** — a Backend / Infrastructure Engineer based in Indonesia.
 
-I build fast, accessible, and well-architected web applications with a strong focus on clean code, developer experience, and real-world performance.
+I specialize in building reliable, secure, and scalable systems with a strong focus on data consistency, performance, and clean architecture.
 
 ## Bio
 
-Building accessible, pixel-perfect web experiences. Fanatical about performance, clean architecture, and keyboard-driven workflows.
+I care deeply about designing systems that work correctly under real-world conditions — from handling concurrent transactions to building observable and maintainable services.
 
-I care deeply about the craft — from designing intuitive APIs to shipping polished UIs that feel native and snappy.
+My work focuses on backend systems, distributed architecture, and security, while still being able to deliver end-to-end solutions when needed.
 
 ## What I Do
 
-- Design and build full-stack web applications end-to-end
-- Architect backend systems with clean, maintainable code
-- Write strongly-typed, well-tested frontend interfaces
-- Optimize for performance, accessibility, and developer ergonomics
+* Design and build backend systems with strong consistency and reliability guarantees
+* Architect scalable services using Go and modern distributed system patterns
+* Implement security best practices including rate limiting, validation, and system hardening
+* Build observable systems with logging, metrics, and tracing
+* Deliver full-stack applications when required, with a focus on performance and usability
 
 ## Core Stack
 
-### Frontend
-- React, TypeScript, Tailwind CSS, Next.js, Html, css
-
 ### Backend
-- Go, Node.js, Rust
-- PostgreSQL, MySQL, Redis
-- RabbitMQ, Kafka
-- REST, gRPC, WebSocket
+
+* Go, Rust, Node.js
+* PostgreSQL, MySQL, Redis
+* Kafka, RabbitMQ
+* REST, gRPC, WebSocket
 
 ### Infrastructure & DevOps
-- Linux, Docker, Kubernetes, Minikube
-- Terraform, Pulumi, Localstack
-- CI/CD: GitHub Actions, Railway
+
+* Linux, Docker, Kubernetes
+* Terraform, Pulumi
+* CI/CD: GitHub Actions
 
 ### Observability
-- Grafana, Prometheus, Loki
-- Distributed tracing, structured logging, alerting pipelines
 
-### Security Tooling
-- **SIEM / Threat Detection**: Wazuh (agent-based monitoring, FIM, log analysis)
-- **Web App Security**: OWASP ZAP (automated DAST scanning), Burp Suite
-- **Network Recon & Analysis**: Nmap, Wireshark, Netcat
-- **Vulnerability Assessment**: Trivy (container scanning), Nikto, Nuclei
-- **Hardening References**: OWASP Top 10, CIS Benchmarks, CVE tracking
+* Prometheus, Grafana, Loki
+* Distributed tracing, structured logging, alerting pipelines
+
+### Security
+
+* HMAC request validation, rate limiting, input/output guardrails
+* OWASP Top 10, secure system design practices
 
 ### Frontend (when needed)
-- React, TypeScript, Tailwind CSS, Next.js
+
+* React, TypeScript, Next.js, Tailwind CSS, Vite
+
+## Selected Work
+
+* **E-Wallet System** — Designed a transactional system ensuring data consistency using ACID principles and handling concurrent balance updates safely
+* **Security Screening Tool (Go)** — Built a tool to analyze and detect potential vulnerabilities in applications
+* **Portfolio System (this site)** — Custom backend built with Rust, featuring AI-assisted interaction with guardrails and structured content delivery
 
 ## A Bit More
 
-When I'm not writing code, I'm probably reading about systems design, setting up a new homelab service, or digging into a CVE that looks interesting.
+Outside of coding, I spend time studying system design, exploring infrastructure setups, and learning more about security and real-world system failures.
 
-I thrive in environments where reliability and security aren't afterthoughts — teams that write runbooks, own their on-call, and actually fix the root cause.
+I enjoy working in environments where reliability, ownership, and long-term system quality matter — not just shipping features.
 
 > Type `:q` to exit (just kidding).
