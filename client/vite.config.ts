@@ -5,7 +5,7 @@ import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: process.env.VITE_BASE_PATH || '/',
+  base: '/',
   plugins: [react(), markdownPlugin({ mode: [Mode.MARKDOWN] })],
   resolve: {
     alias: {
