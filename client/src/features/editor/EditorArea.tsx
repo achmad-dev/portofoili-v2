@@ -52,7 +52,7 @@ export const EditorArea: React.FC = () => {
               </div>
             ) : files[activeFileId].name.endsWith('.md') ? (
               <div className="p-4 md:p-8 min-h-full flex justify-center">
-                <MarkdownViewer content={files[activeFileId].content} />
+                <MarkdownViewer content={files[activeFileId].content ?? ''} />
               </div>
             ) : (
               <div className="p-2 md:p-4 min-h-full pb-20">

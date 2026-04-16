@@ -124,7 +124,7 @@ impl AiProvider for GeminiProvider {
         let api_key = env::var("GEMINI_API_KEY")
             .map_err(|_| AppError::Validation("API key not found".to_string()))?;
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={}",
             api_key
         );
 

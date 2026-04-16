@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import {
   streamGemini,
   fetchMessages,
@@ -13,69 +14,80 @@ interface ChatMessage {
   thinking?: string[];
 }
 
+interface ApiChatMessage {
+  user_prompt: string;
+  ai_response: string;
+}
+
+const SYSTEM_MESSAGES: ChatMessage[] = [
+  {
+    role: 'system',
+    text: 'NvChad Copilot v1.0 initialized for user: Guest...',
+  },
+  {
+    role: 'ai',
+    text: 'Hello Guest I am your portfolio assistant. Ask me about this portfolio.',
+  },
+];
+
 export const ChatBuffer: React.FC = () => {
   const [input, setInput] = useState('');
-  const [history, setHistory] = useState<ChatMessage[]>([
-    {
-      role: 'system',
-      text: `NvChad Copilot v1.0 initialized for user: Guest...`,
-    },
-    {
-      role: 'ai',
-      text: `Hello Guest I am your portfolio assistant. Ask me about this portfolio.`,
-    },
-  ]);
+  const [localHistory, setLocalHistory] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const isGeneratingRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
 
-  // Initial fetch
+  // ── Paginated fetch via TanStack Query ────────────────────────────────────
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ['chat-messages'],
+      queryFn: async ({ pageParam = 1 }) => {
+        const result = await fetchMessages(pageParam as number, 10);
+        return {
+          messages: result as ApiChatMessage[],
+          page: pageParam as number,
+        };
+      },
+      initialPageParam: 1,
+      getNextPageParam: (lastPage) => {
+        if (lastPage.messages.length < 10) return undefined;
+        return lastPage.page + 1;
+      },
+    });
+
+  // Flatten paginated data into ChatMessage[] (oldest first)
+  const fetchedHistory: ChatMessage[] = React.useMemo(() => {
+    if (!data) return [];
+    const allPages = [...data.pages].reverse();
+    return allPages.flatMap((page) =>
+      [...page.messages].reverse().flatMap((chat) => [
+        { role: 'user' as const, text: chat.user_prompt },
+        { role: 'ai' as const, text: chat.ai_response, thinking: [] },
+      ])
+    );
+  }, [data]);
+
+  // Combined history: system messages + fetched + local (in-progress)
+  const history: ChatMessage[] = [
+    ...SYSTEM_MESSAGES,
+    ...fetchedHistory,
+    ...localHistory,
+  ];
+
+  // ── Global SSE subscription (other clients) ───────────────────────────────
   useEffect(() => {
-    const loadInitialChats = async () => {
-      try {
-        const data = await fetchMessages(1, 10);
-        if (data.length < 10) setHasMore(false);
+    const sse = subscribeToGlobalStream((event: AiEvent) => {
+      // Skip if this client is the one generating
+      if (isGeneratingRef.current) return;
 
-        // Reverse because backend sends ORDER BY created_at DESC
-        const formatted: ChatMessage[] = data.reverse().flatMap((chat: any) => [
-          { role: 'user', text: chat.user_prompt },
-          { role: 'ai', text: chat.ai_response, thinking: [] },
-        ]);
-
-        setHistory((prev) => [...prev, ...formatted]);
-        isFirstLoad.current = false;
-      } catch (e) {
-        console.error('Failed to load initial chats', e);
-      }
-    };
-    loadInitialChats();
-  }, []);
-
-  // Global Stream Subscription
-  useEffect(() => {
-    const sse = subscribeToGlobalStream((event) => {
-      // We no longer rely on the global stream to append messages if we are the one initiating the prompt.
-      // However, if we aren't loading, it means another client might be generating a response.
-      // Wait, since this is a global broadcast, we could just let the global stream handle EVERYTHING
-      // and NOT have `streamGemini` update the UI in `handleSubmit`.
-      // BUT `streamGemini` is the one making the HTTP POST request.
-      // To prevent duplicates simply: if we are loading, we ignore global stream events, because
-      // the local `streamGemini` callback is already updating our local state.
-      setHistory((prev) => {
-        // Only ignore if the LAST message is an active AI message that we are currently writing to,
-        // and we are currently loading.
-        if (loading) return prev;
-
+      setLocalHistory((prev) => {
         const newHistory = [...prev];
         let lastMsg = newHistory[newHistory.length - 1];
 
-        // If the last message is not an active AI message, create one
-        // Also if we receive a Thinking event and the last message already has text,
-        // it means this is a brand new generation cycle from another client.
         if (
+          !lastMsg ||
           lastMsg.role !== 'ai' ||
           (lastMsg.text.length > 0 && event.type === 'Thinking')
         ) {
@@ -96,77 +108,64 @@ export const ChatBuffer: React.FC = () => {
     });
 
     return () => sse.close();
-  }, [loading]);
+  }, []);
 
-  // Auto-scroll on new message
+  // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
-    // Only scroll to bottom if we are relatively close to it, or on first load
     if (scrollRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
       if (isNearBottom || isFirstLoad.current) {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        isFirstLoad.current = false;
       }
     }
   }, [history]);
 
-  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
-    if (e.currentTarget.scrollTop === 0 && hasMore) {
-      const nextPage = page + 1;
-      try {
-        const data = await fetchMessages(nextPage, 10);
-        if (data.length < 10) setHasMore(false);
-        if (data.length > 0) {
-          const formatted: ChatMessage[] = data
-            .reverse()
-            .flatMap((chat: any) => [
-              { role: 'user', text: chat.user_prompt },
-              { role: 'ai', text: chat.ai_response, thinking: [] },
-            ]);
-
-          setHistory((prev) => {
-            // Keep the system init message at index 0-1
-            const base = prev.slice(0, 2);
-            const rest = prev.slice(2);
-
-            // To maintain correct chronological order:
-            // older messages should be pushed immediately after the base system messages.
-            return [...base, ...formatted, ...rest];
-          });
-          setPage(nextPage);
-
-          // Adjust scroll position so the user doesn't jump back to the absolute top
+  // ── Infinite scroll (load older messages on scroll to top) ────────────────
+  const handleScroll = useCallback(
+    async (e: React.UIEvent<HTMLDivElement>) => {
+      if (
+        e.currentTarget.scrollTop === 0 &&
+        hasNextPage &&
+        !isFetchingNextPage
+      ) {
+        const prevScrollHeight = e.currentTarget.scrollHeight;
+        await fetchNextPage();
+        // Restore scroll position so the user doesn't jump to the top
+        requestAnimationFrame(() => {
           if (scrollRef.current) {
-            scrollRef.current.scrollTop = 100; // Small offset to prevent immediate re-trigger
+            scrollRef.current.scrollTop =
+              scrollRef.current.scrollHeight - prevScrollHeight;
           }
-        }
-      } catch (e) {
-        console.error('Failed to fetch more messages', e);
+        });
       }
-    }
-  };
+    },
+    [hasNextPage, isFetchingNextPage, fetchNextPage]
+  );
 
+  // ── Submit handler ────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
-    const userMsg: ChatMessage = { role: 'user', text: input };
-    const prompt = `${input}`;
+    const prompt = input.trim();
 
-    setHistory((prev) => [
+    setLocalHistory((prev) => [
       ...prev,
-      userMsg,
+      { role: 'user', text: prompt },
       { role: 'ai', text: '', thinking: [] },
     ]);
     setInput('');
     setLoading(true);
+    isGeneratingRef.current = true;
 
     await streamGemini(prompt, (event: AiEvent) => {
-      setHistory((prev) => {
+      setLocalHistory((prev) => {
         const newHistory = [...prev];
         const lastMsg = newHistory[newHistory.length - 1];
 
-        if (lastMsg.role === 'ai') {
+        if (lastMsg?.role === 'ai') {
           if (event.type === 'Thinking') {
             lastMsg.thinking = [...(lastMsg.thinking || []), event.content];
           } else if (event.type === 'Response') {
@@ -175,15 +174,22 @@ export const ChatBuffer: React.FC = () => {
             lastMsg.text = event.content;
           }
         }
+
         return newHistory;
       });
 
       if (event.type === 'Response' || event.type === 'Error') {
         setLoading(false);
+        isGeneratingRef.current = false;
       }
     });
+
+    // Safety net: ensure flags are reset even if stream ends unexpectedly
+    setLoading(false);
+    isGeneratingRef.current = false;
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full font-mono p-4">
       <div
@@ -191,6 +197,14 @@ export const ChatBuffer: React.FC = () => {
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto space-y-4 pb-4 custom-scrollbar pr-2"
       >
+        {/* Load more indicator */}
+        {isFetchingNextPage && (
+          <div className="flex justify-center py-2 text-xs text-catppuccin-overlay0 italic">
+            <Loader2 size={12} className="animate-spin mr-1" />
+            Loading older messages...
+          </div>
+        )}
+
         {history.map((msg, i) => (
           <div
             key={i}

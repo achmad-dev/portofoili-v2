@@ -87,10 +87,11 @@ const generateFileSystem = () => {
           children: [],
         };
         // Add this folder to the root children if not already there
-        if (!fsState.root.children.includes(folderName)) {
-           // Insert folders after 'content' to keep it somewhat organized
-           const contentIndex = fsState.root.children.indexOf('content');
-           fsState.root.children.splice(contentIndex + 1, 0, folderName);
+        if (!fsState.root.children?.includes(folderName)) {
+          // Insert folders after 'content' to keep it somewhat organized
+          const contentIndex = fsState.root.children?.indexOf('content') ?? -1;
+          fsState.root.children = fsState.root.children ?? [];
+          fsState.root.children.splice(contentIndex + 1, 0, folderName);
         }
       }
 
@@ -100,6 +101,7 @@ const generateFileSystem = () => {
       folderChildren[folderName].push(filename);
     } else {
       // It's a file directly in content/ (e.g. about.md)
+      fsState.content.children = fsState.content.children ?? [];
       fsState.content.children.push(filename);
     }
   }

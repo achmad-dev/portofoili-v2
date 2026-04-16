@@ -1,0 +1,94 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Detect which parts of the codebase changed ──────────────────────────────
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend || steps.manual.outputs.all }}
+      backend: ${{ steps.filter.outputs.backend || steps.manual.outputs.all }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # On manual dispatch — deploy everything
+      - name: Set manual trigger flag
+        id: manual
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "all=true" >> $GITHUB_OUTPUT
+
+      # On push — only detect changed paths
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            frontend:
+              - 'client/**'
+            backend:
+              - 'backend/**'
+
+  # ── Deploy frontend to GitHub Pages ─────────────────────────────────────────
+  deploy-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: client
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        working-directory: client
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_HMAC_SECRET: ${{ secrets.VITE_HMAC_SECRET }}
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+        run: bun run build
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: client/dist
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
+
+  # ── Deploy backend to Railway ────────────────────────────────────────────────
+  deploy-backend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        working-directory: backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service portfolio-backend --detach
