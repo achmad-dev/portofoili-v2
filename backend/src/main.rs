@@ -24,7 +24,12 @@ async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt::init();
 
     // Initialize database pool
-    let pool = db::init_db().await;
+    let pool = {
+        tracing::info!("Initializing database pool...");
+        let p = db::init_db().await;
+        tracing::info!("Database pool initialized successfully.");
+        p
+    };
 
     // Initialize HTTP client
     let client = Client::new();
@@ -58,7 +63,15 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(ai_service.clone()))
             .configure(presentation::routes::config)
     })
-    .bind(&bind_addr)?
+    .bind(&bind_addr)
+    .map_err(|e| {
+        tracing::error!(error = %e, addr = %bind_addr, "Failed to bind server to address");
+        e
+    })?
     .run()
     .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Server encountered a fatal error");
+        e
+    })
 }
