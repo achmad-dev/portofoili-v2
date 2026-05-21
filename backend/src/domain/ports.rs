@@ -17,9 +17,17 @@ pub trait AiProvider: Send + Sync {
 pub trait ChatRepository: Send + Sync {
     async fn check_ip_rate_limit(&self, ip: &str) -> Result<bool, AppError>;
     async fn check_global_rate_limit(&self) -> Result<bool, AppError>;
-    async fn get_similar_documents(&self, embedding: Vector, limit: i64) -> Result<Vec<SimilarDocument>, AppError>;
+    async fn get_similar_documents(
+        &self,
+        embedding: Vector,
+        limit: i64,
+    ) -> Result<Vec<SimilarDocument>, AppError>;
     async fn get_recent_chats(&self, limit: i64) -> Result<Vec<ChatMessage>, AppError>;
-    async fn get_paginated_chats(&self, offset: i64, limit: i64) -> Result<Vec<ChatMessage>, AppError>;
+    async fn get_paginated_chats(
+        &self,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Vec<ChatMessage>, AppError>;
     async fn save_chat(&self, ip: &str, prompt: &str, response: &str) -> Result<(), AppError>;
     async fn log_event(&self, log: LogEntry) -> Result<(), AppError>;
 }
