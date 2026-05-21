@@ -134,7 +134,7 @@ jobs:
 
       - name: Pull image & restart container on EC2
         env:
-          IMAGE: ghcr.io/${{ github.repository }}/backend:sha-${{ github.sha }}
+          IMAGE: ghcr.io/${{ github.repository }}/backend:latest
           PORT: ${{ vars.BACKEND_PORT || '8080' }}
         run: |
           ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no \
