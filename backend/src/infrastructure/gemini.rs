@@ -123,8 +123,10 @@ impl AiProvider for GeminiProvider {
     async fn generate_content(&self, prompt: &str) -> Result<String, AppError> {
         let api_key = env::var("GEMINI_API_KEY")
             .map_err(|_| AppError::Validation("API key not found".to_string()))?;
+        let model = env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-flash-latest".to_string());
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={}",
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            model,
             api_key
         );
 
