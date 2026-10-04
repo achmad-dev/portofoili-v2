@@ -3,7 +3,8 @@ use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-#[allow(dead_code)] pub enum AppError {
+#[allow(dead_code)]
+pub enum AppError {
     #[error("Validation Error: {0}")]
     Validation(String),
 
@@ -25,12 +26,14 @@ struct ErrorResponse {
 impl ResponseError for AppError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            AppError::Validation(msg) => HttpResponse::BadRequest().json(ErrorResponse {
-                error: msg.clone(),
-            }),
+            AppError::Validation(msg) => {
+                HttpResponse::BadRequest().json(ErrorResponse { error: msg.clone() })
+            }
+
             AppError::RateLimit => HttpResponse::TooManyRequests().json(ErrorResponse {
                 error: "Rate limit exceeded".to_string(),
             }),
+
             AppError::Database(_) | AppError::Internal(_) => {
                 tracing::error!("Internal error: {:?}", self);
                 HttpResponse::InternalServerError().json(ErrorResponse {

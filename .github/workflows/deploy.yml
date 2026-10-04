@@ -76,21 +76,105 @@ jobs:
       - uses: actions/deploy-pages@v4
         id: deployment
 
-  # ── Deploy backend to Railway ────────────────────────────────────────────────
-  deploy-backend:
+  # ── Build Docker image & push to GitHub Container Registry ──────────────────
+  build-backend:
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to Railway
-        working-directory: .
+      - name: Extract Docker metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/backend
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Pull pre-built image on EC2 & restart container ─────────────────────────
+  deploy-backend:
+    needs: [detect-changes, build-backend]
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Pull image & restart container on EC2
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-        run: railway up --service ${{ secrets.RAILWAY_SERVICE_NAME }} --detach
+          GITHUB_TOKEN_VAL: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR_VAL: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          BACKEND_PORT: ${{ secrets.BACKEND_PORT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            GITHUB_TOKEN_VAL="$GITHUB_TOKEN_VAL" \
+            GITHUB_ACTOR_VAL="$GITHUB_ACTOR_VAL" \
+            REPO="$REPO" \
+            EC2_USER="$EC2_USER" \
+            BACKEND_PORT="$BACKEND_PORT" \
+            GEMINI_API_KEY="$GEMINI_API_KEY" \
+            HMAC_SECRET="$HMAC_SECRET" \
+            FRONTEND_URL="$FRONTEND_URL" \
+            SUPABASE_URL="$SUPABASE_URL" \
+            bash -s << 'SCRIPT'
+          set -e
+
+          echo "$GITHUB_TOKEN_VAL" | docker login ghcr.io -u "$GITHUB_ACTOR_VAL" --password-stdin
+
+          docker pull "ghcr.io/$REPO/backend:latest"
+
+          docker stop portfolio-backend 2>/dev/null || true
+          docker rm   portfolio-backend 2>/dev/null || true
+          docker run -d \
+            --name portfolio-backend \
+            --restart unless-stopped \
+            --env HOST=0.0.0.0 \
+            --env PORT="$BACKEND_PORT" \
+            --env GEMINI_API_KEY="$GEMINI_API_KEY" \
+            --env HMAC_SECRET="$HMAC_SECRET" \
+            --env FRONTEND_URL="$FRONTEND_URL" \
+            --env SUPABASE_URL="$SUPABASE_URL" \
+            -p "$BACKEND_PORT:$BACKEND_PORT" \
+            "ghcr.io/$REPO/backend:latest"
+
+          docker image prune -f
+          SCRIPT

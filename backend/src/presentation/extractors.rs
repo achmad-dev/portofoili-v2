@@ -1,5 +1,5 @@
 use actix_web::{
-    dev::Payload, error::ErrorUnauthorized, web, Error as ActixError, FromRequest, HttpRequest,
+    Error as ActixError, FromRequest, HttpRequest, dev::Payload, error::ErrorUnauthorized, web,
 };
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
@@ -12,11 +12,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 // ── Shared HMAC verification helper ──────────────────────────────────────────
 
-fn verify_hmac(
-    signature: &str,
-    timestamp_str: &str,
-    data_to_sign: &str,
-) -> Result<(), ActixError> {
+fn verify_hmac(signature: &str, timestamp_str: &str, data_to_sign: &str) -> Result<(), ActixError> {
     let timestamp: i64 = timestamp_str
         .parse()
         .map_err(|_| ErrorUnauthorized("Invalid x-timestamp"))?;
@@ -72,14 +68,14 @@ where
                 .ok_or_else(|| ErrorUnauthorized("Missing x-timestamp header"))?;
 
             // Data to sign: timestamp + "." + body
-            let body_str = std::str::from_utf8(&bytes)
-                .map_err(|_| ErrorUnauthorized("Invalid UTF-8 body"))?;
+            let body_str =
+                std::str::from_utf8(&bytes).map_err(|_| ErrorUnauthorized("Invalid UTF-8 body"))?;
             let data_to_sign = format!("{}.{}", timestamp_str, body_str);
 
             verify_hmac(signature, timestamp_str, &data_to_sign)?;
 
-            let obj: T = serde_json::from_slice(&bytes)
-                .map_err(actix_web::error::ErrorBadRequest)?;
+            let obj: T =
+                serde_json::from_slice(&bytes).map_err(actix_web::error::ErrorBadRequest)?;
 
             Ok(HmacJson(obj))
         })
