@@ -24,7 +24,7 @@ interface FileSystemContextType {
 const FileSystemContext = createContext<FileSystemContextType | undefined>(
   undefined
 );
-
+// FileSystemProvider component that provides the file system context to its children
 export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
   const [files, setFiles] = useState<FileSystemState>(INITIAL_FILES);
   const [openFiles, setOpenFiles] = useState<string[]>(['content/about.md']);
