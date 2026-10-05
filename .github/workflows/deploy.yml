@@ -36,6 +36,7 @@ jobs:
               - '.github/workflows/deploy.yml'
             backend:
               - 'backend/**'
+              - '.github/workflows/deploy.yml'
 
   # ── Build frontend before entering the Pages deployment environment ────────
   build-frontend:
@@ -164,7 +165,7 @@ jobs:
             HMAC_SECRET="$HMAC_SECRET" \
             FRONTEND_URL="$FRONTEND_URL" \
             SUPABASE_URL="$SUPABASE_URL" \
-            GEMINI_MODEL="$GEMINI_MODEL" \  
+            GEMINI_MODEL="$GEMINI_MODEL" \
             bash -s << 'SCRIPT'
           set -e
 
@@ -183,6 +184,7 @@ jobs:
             --env HMAC_SECRET="$HMAC_SECRET" \
             --env FRONTEND_URL="$FRONTEND_URL" \
             --env SUPABASE_URL="$SUPABASE_URL" \
+            --env GEMINI_MODEL="$GEMINI_MODEL" \
             -p "$BACKEND_PORT:$BACKEND_PORT" \
             "ghcr.io/$REPO/backend:latest"
 

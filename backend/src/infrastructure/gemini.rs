@@ -13,6 +13,7 @@ pub struct GeminiProvider {
     model: String,
 }
 
+// GeminiProvider is an implementation of the AiProvider trait that interacts with the Gemini API for generating content and embeddings.
 impl GeminiProvider {
     pub fn new(client: Client) -> Self {
         let model = env::var("GEMINI_MODEL")

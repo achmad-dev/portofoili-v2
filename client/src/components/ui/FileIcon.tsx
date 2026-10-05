@@ -13,6 +13,7 @@ interface FileIconProps {
   type: string;
 }
 
+// FileIcon is a React functional component that renders an appropriate icon based on the file name and type provided as props.
 export const FileIcon: React.FC<FileIconProps> = ({ name, type }) => {
   if (type === 'folder')
     return (
