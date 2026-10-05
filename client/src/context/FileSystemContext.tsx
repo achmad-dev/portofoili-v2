@@ -8,6 +8,7 @@ import React, {
 import { INITIAL_FILES } from '@/config/files';
 import { FileSystemState } from '@/types';
 
+// Define the shape of the context value
 interface FileSystemContextType {
   files: FileSystemState;
   openFiles: string[];

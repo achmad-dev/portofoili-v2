@@ -6,6 +6,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 import re
 from urllib.error import URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
@@ -105,6 +106,22 @@ def published_date(value: str) -> str:
             return ""
 
 
+def article_key(link: str) -> str:
+    path = urlsplit(link).path.rstrip("/")
+    article_id = re.search(r"-([0-9a-f]{12})$", path, re.IGNORECASE)
+    return article_id.group(1).lower() if article_id else path
+
+
+def existing_articles(name: str) -> set[str]:
+    articles = set()
+    source_link = re.compile(rf"\[Read on {re.escape(name)}\]\((https?://[^)]+)\)")
+    for file in OUTPUT_DIR.glob("*.md"):
+        match = source_link.search(file.read_text(encoding="utf-8"))
+        if match:
+            articles.add(article_key(match.group(1)))
+    return articles
+
+
 def sync_feed(name: str, url: str) -> None:
     request = Request(url, headers={"User-Agent": "AchmadPortfolio/1.0"})
     try:
@@ -120,6 +137,8 @@ def sync_feed(name: str, url: str) -> None:
         return
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    articles = existing_articles(name)
+    added = 0
     for entry in entries:
         fields: dict[str, str] = {}
         for child in entry:
@@ -139,6 +158,8 @@ def sync_feed(name: str, url: str) -> None:
         title = fields.get("title", "Untitled")
         slug = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", title.lower())).strip("-")
         link = fields.get("link", "")
+        if link and article_key(link) in articles:
+            continue
         body = html_to_markdown(fields.get("body", ""))
         if not body.startswith("# "):
             body = f"# {title}\n\n{body}"
@@ -148,8 +169,11 @@ def sync_feed(name: str, url: str) -> None:
             byline += f"[Read on {name}]({link})"
         post = f"{body}\n\n---\n\n{byline}\n"
         (OUTPUT_DIR / f"{name}-{slug or 'post'}.md").write_text(post, encoding="utf-8")
+        added += 1
+        if link:
+            articles.add(article_key(link))
 
-    print(f"Synced {len(entries)} post(s) from {name}.")
+    print(f"Added {added} of {len(entries)} post(s) from {name}.")
 
 
 if __name__ == "__main__":
