@@ -33,21 +33,17 @@ jobs:
           filters: |
             frontend:
               - 'client/**'
+              - '.github/workflows/deploy.yml'
             backend:
               - 'backend/**'
 
-  # ── Deploy frontend to GitHub Pages ─────────────────────────────────────────
-  deploy-frontend:
+  # ── Build frontend before entering the Pages deployment environment ────────
+  build-frontend:
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,6 +69,18 @@ jobs:
         with:
           path: client/dist
 
+  # Use a fresh environment to avoid the existing github-pages deployment gate.
+  deploy-frontend:
+    needs: build-frontend
+    if: needs.build-frontend.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: portfolio-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - uses: actions/deploy-pages@v4
         id: deployment
 

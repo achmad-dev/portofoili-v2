@@ -3,6 +3,7 @@ import { useFileSystem } from '@/context/FileSystemContext';
 import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
 import { FileIcon } from '@/components/ui/FileIcon';
 
+// This component renders the sidebar for the file explorer, displaying folders and files in a tree structure. It uses the `useFileSystem` hook to access the file system state and actions.
 export const Sidebar: React.FC = () => {
   const { files, activeFileId, isSidebarOpen, toggleFolder, openFile } =
     useFileSystem();
