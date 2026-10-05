@@ -1,5 +1,6 @@
 use crate::error::AppError;
-use crate::presentation::extractors::{HmacJson, HmacQuery};
+use crate::presentation::extractors::{HmacGuard, HmacJson};
+use crate::presentation::handlers::auth::{TicketStore, consume_ticket};
 use crate::service::ai_service::AiService;
 use actix_web::{HttpRequest, HttpResponse, Responder, post, web};
 use bytes::Bytes;
@@ -20,6 +21,11 @@ pub struct PaginationQuery {
     pub limit: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TicketQuery {
+    pub ticket: String,
+}
+
 #[derive(Debug, Serialize)]
 #[allow(dead_code)]
 pub struct GenerateResponse {
@@ -32,11 +38,17 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
+// ── GET /api/ai/messages ──────────────────────────────────────────────────────
+//
+// Protected by HmacGuard (x-timestamp + x-signature headers).
+// Signed data: "<timestamp>"
+
 #[actix_web::get("/messages")]
 #[instrument(skip(service))]
 pub async fn get_messages(
+    _guard: HmacGuard,
     service: web::Data<Arc<AiService>>,
-    query: HmacQuery<PaginationQuery>,
+    query: web::Query<PaginationQuery>,
 ) -> Result<impl Responder, AppError> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.unwrap_or(20).clamp(1, 50);
@@ -46,7 +58,11 @@ pub async fn get_messages(
     Ok(HttpResponse::Ok().json(messages))
 }
 
-// This endpoint is designed to handle long-running AI response generation and stream results back to the client in real-time using Server-Sent Events (SSE).
+// ── POST /api/ai/generate ─────────────────────────────────────────────────────
+//
+// Protected by HmacJson (x-timestamp + x-signature headers + body signing).
+// Signed data: "<timestamp>.<json_body>"
+
 #[post("/generate")]
 #[instrument(skip(service))]
 pub async fn generate(
@@ -60,10 +76,8 @@ pub async fn generate(
         .unwrap_or("unknown")
         .to_string();
 
-    // Attempt to get IP from X-Forwarded-For if deployed behind a proxy
     if let Some(forwarded_for) = req.headers().get("X-Forwarded-For") {
         if let Ok(forwarded_str) = forwarded_for.to_str() {
-            // X-Forwarded-For can contain multiple IPs, the first one is the client
             if let Some(first_ip) = forwarded_str.split(',').next() {
                 ip = first_ip.trim().to_string();
             }
@@ -91,16 +105,22 @@ pub async fn generate(
         .streaming(sse_stream))
 }
 
-// Phantom wrapper so HmacQuery has a concrete type to deserialize into.
-// The stream endpoint carries no real query params beyond the HMAC fields.
-#[derive(Debug, serde::Deserialize)]
-pub struct NoParams {}
+// ── GET /api/ai/messages/stream ───────────────────────────────────────────────
+//
+// Protected by a one-time ticket issued from POST /api/auth/ticket.
+// The client passes ?ticket=<uuid> in the URL (EventSource cannot set headers).
+// Ticket is consumed on first use and expires after 5 seconds.
 
 #[actix_web::get("/messages/stream")]
 pub async fn stream_messages(
     service: web::Data<Arc<AiService>>,
-    _auth: HmacQuery<NoParams>,
+    ticket_store: web::Data<TicketStore>,
+    query: web::Query<TicketQuery>,
 ) -> impl Responder {
+    if let Err(reason) = consume_ticket(&ticket_store, &query.ticket) {
+        return HttpResponse::Unauthorized().json(serde_json::json!({ "error": reason }));
+    }
+
     let mut rx = service.subscribe();
 
     let stream = async_stream::stream! {

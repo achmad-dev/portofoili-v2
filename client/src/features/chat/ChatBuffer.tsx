@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+} from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import {
   streamGemini,
@@ -7,11 +13,15 @@ import {
   AiEvent,
 } from '@/utils/gemini';
 import { Bot, ChevronRight, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatMessage {
   role: 'system' | 'ai' | 'user';
   text: string;
   thinking?: string[];
+  failed?: boolean;
+  prompt?: string;
 }
 
 interface ApiChatMessage {
@@ -35,9 +45,9 @@ export const ChatBuffer: React.FC = () => {
   const [localHistory, setLocalHistory] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const isGeneratingRef = useRef(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isFirstLoad = useRef(true);
+  const initialScrollDone = useRef(false);
+  const stickToBottom = useRef(true);
 
   // ── Paginated fetch via TanStack Query ────────────────────────────────────
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -78,9 +88,7 @@ export const ChatBuffer: React.FC = () => {
 
   // ── Global SSE subscription (other clients) ───────────────────────────────
   useEffect(() => {
-    let sseRef: EventSource | null = null;
-
-    subscribeToGlobalStream((event: AiEvent) => {
+    const subscription = subscribeToGlobalStream((event: AiEvent) => {
       // Skip if this client is the one generating
       if (isGeneratingRef.current) return;
 
@@ -107,34 +115,36 @@ export const ChatBuffer: React.FC = () => {
 
         return newHistory;
       });
-    }).then((sse) => {
-      sseRef = sse;
     });
 
-    return () => sseRef?.close();
+    return () => subscription.close();
   }, []);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-      if (isNearBottom || isFirstLoad.current) {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-        isFirstLoad.current = false;
-      }
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !data) return;
+    if (!initialScrollDone.current || stickToBottom.current) {
+      scroller.scrollTop = scroller.scrollHeight;
+      initialScrollDone.current = true;
     }
-  }, [history]);
+  }, [data, localHistory]);
 
   // ── Infinite scroll (load older messages on scroll to top) ────────────────
   const handleScroll = useCallback(
     async (e: React.UIEvent<HTMLDivElement>) => {
+      const scroller = e.currentTarget;
+      stickToBottom.current =
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <
+        100;
       if (
-        e.currentTarget.scrollTop === 0 &&
+        initialScrollDone.current &&
+        scroller.scrollTop <= 4 &&
+        scroller.scrollHeight > scroller.clientHeight &&
         hasNextPage &&
         !isFetchingNextPage
       ) {
-        const prevScrollHeight = e.currentTarget.scrollHeight;
+        const prevScrollHeight = scroller.scrollHeight;
         await fetchNextPage();
         // Restore scroll position so the user doesn't jump to the top
         requestAnimationFrame(() => {
@@ -149,18 +159,20 @@ export const ChatBuffer: React.FC = () => {
   );
 
   // ── Submit handler ────────────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || loading) return;
-
-    const prompt = input.trim();
-
-    setLocalHistory((prev) => [
-      ...prev,
-      { role: 'user', text: prompt },
-      { role: 'ai', text: '', thinking: [] },
-    ]);
-    setInput('');
+  const runPrompt = async (prompt: string, retry = false) => {
+    stickToBottom.current = true;
+    if (retry) {
+      setLocalHistory((prev) => [
+        ...prev.slice(0, -1),
+        { role: 'ai', text: '', thinking: [], prompt },
+      ]);
+    } else {
+      setLocalHistory((prev) => [
+        ...prev,
+        { role: 'user', text: prompt },
+        { role: 'ai', text: '', thinking: [], prompt },
+      ]);
+    }
     setLoading(true);
     isGeneratingRef.current = true;
 
@@ -174,8 +186,10 @@ export const ChatBuffer: React.FC = () => {
             lastMsg.thinking = [...(lastMsg.thinking || []), event.content];
           } else if (event.type === 'Response') {
             lastMsg.text = event.content;
+            lastMsg.failed = false;
           } else if (event.type === 'Error') {
             lastMsg.text = event.content;
+            lastMsg.failed = true;
           }
         }
 
@@ -193,13 +207,22 @@ export const ChatBuffer: React.FC = () => {
     isGeneratingRef.current = false;
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || loading) return;
+    const prompt = input.trim();
+    setInput('');
+    await runPrompt(prompt);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full font-mono p-4">
+    <div className="flex flex-col h-full min-h-0 font-mono p-4">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto space-y-4 pb-4 custom-scrollbar pr-2"
+        data-lenis-prevent
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 pb-4 custom-scrollbar pr-2"
       >
         {/* Load more indicator */}
         {isFetchingNextPage && (
@@ -252,11 +275,28 @@ export const ChatBuffer: React.FC = () => {
                 </div>
               )}
 
-              <div className="whitespace-pre-wrap">{msg.text}</div>
+              {msg.role === 'ai' ? (
+                <div className="chat-markdown prose prose-invert max-w-none font-sans">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.text}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <div className="whitespace-pre-wrap">{msg.text}</div>
+              )}
+              {msg.role === 'ai' && msg.failed && msg.prompt && (
+                <button
+                  type="button"
+                  onClick={() => runPrompt(msg.prompt!, true)}
+                  disabled={loading}
+                  className="mt-3 rounded border border-catppuccin-surface1 px-2.5 py-1 text-xs text-catppuccin-blue hover:bg-catppuccin-surface0 disabled:opacity-50"
+                >
+                  Retry response
+                </button>
+              )}
             </div>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
 
       <form

@@ -4,6 +4,15 @@ use crate::error::AppError;
 use async_trait::async_trait;
 use pgvector::Vector;
 use sqlx::PgPool;
+use std::env;
+
+fn daily_limit(name: &str, fallback: i64) -> i64 {
+    env::var(name)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(fallback)
+}
 
 pub struct SupabaseRepository {
     pool: PgPool,
@@ -27,8 +36,7 @@ impl ChatRepository for SupabaseRepository {
         .fetch_one(&self.pool)
         .await?;
 
-        // We should enforce the limit even for localhost/127.0.0.1 if deployed online behind a proxy,
-        Ok(count.0 < 1)
+        Ok(count.0 < daily_limit("AI_DAILY_LIMIT_PER_IP", 3))
     }
 
     async fn check_global_rate_limit(&self) -> Result<bool, AppError> {
@@ -39,7 +47,7 @@ impl ChatRepository for SupabaseRepository {
                 .fetch_one(&self.pool)
                 .await?;
 
-        Ok(count.0 < 5)
+        Ok(count.0 < daily_limit("AI_DAILY_LIMIT_GLOBAL", 30))
     }
 
     async fn get_similar_documents(

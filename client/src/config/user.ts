@@ -2,8 +2,8 @@ import { UserConfig } from '@/types';
 
 export const USER_CONFIG: UserConfig = {
   name: 'Achmad Al Fazari',
-  role: 'Full Stack Engineer',
-  bio: 'Building accessible, pixel-perfect web experiences. Fanatical about performance, clean architecture, and keyboard-driven workflows.',
+  role: 'Backend / Infrastructure Engineer',
+  bio: 'Building reliable backend systems with strong data consistency, security, observability, and clean architecture.',
   email: 'contact@achmadalfazari.dev',
   github: 'github.com/achmadalfazari',
   twitter: '@achmad_dev',

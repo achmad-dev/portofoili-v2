@@ -17,7 +17,7 @@ interface FileSystemContextType {
   setActiveFileId: React.Dispatch<React.SetStateAction<string | null>>;
   toggleFolder: (folderId: string) => void;
   openFile: (fileId: string) => void;
-  closeFile: (e: React.MouseEvent, fileId: string) => void;
+  closeFile: (fileId: string) => void;
   getFileType: (filename: string) => string;
 }
 
@@ -27,25 +27,22 @@ const FileSystemContext = createContext<FileSystemContextType | undefined>(
 
 export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
   const [files, setFiles] = useState<FileSystemState>(INITIAL_FILES);
-  const [openFiles, setOpenFiles] = useState<string[]>(['about.md']);
-  const [activeFileId, setActiveFileId] = useState<string | null>('about.md');
+  const [openFiles, setOpenFiles] = useState<string[]>(['content/about.md']);
+  const [activeFileId, setActiveFileId] = useState<string | null>(
+    'content/about.md'
+  );
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const handleViewportChange = () => setIsSidebarOpen(desktop.matches);
+    handleViewportChange();
+    desktop.addEventListener('change', handleViewportChange);
+    return () => desktop.removeEventListener('change', handleViewportChange);
   }, []);
 
   const toggleFolder = (folderId: string) => {
+    if (files[folderId]?.type !== 'folder') return;
     setFiles((prev) => ({
       ...prev,
       [folderId]: {
@@ -56,15 +53,13 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const openFile = (fileId: string) => {
-    if (!openFiles.includes(fileId)) {
-      setOpenFiles([...openFiles, fileId]);
-    }
+    if (!files[fileId] || files[fileId].type === 'folder') return;
+    setOpenFiles((prev) => (prev.includes(fileId) ? prev : [...prev, fileId]));
     setActiveFileId(fileId);
     if (window.innerWidth < 768) setIsSidebarOpen(false);
   };
 
-  const closeFile = (e: React.MouseEvent, fileId: string) => {
-    e.stopPropagation();
+  const closeFile = (fileId: string) => {
     const newOpenFiles = openFiles.filter((id) => id !== fileId);
     setOpenFiles(newOpenFiles);
 

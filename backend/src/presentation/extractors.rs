@@ -90,74 +90,29 @@ impl<T> std::ops::Deref for HmacJson<T> {
     }
 }
 
-// ── HmacQuery: HMAC validation via query params (for GET / EventSource) ──────
-//
-// The client must append `?x_timestamp=<ms>&x_signature=<hex>` to the URL.
-// Signed data: "<timestamp>.<raw_query_string_without_hmac_params>"
-//
-// Because EventSource cannot set custom headers, signature and timestamp travel
-// in the query string instead.
-
+// Header-authenticated requests sign the timestamp plus an empty body.
 #[derive(Debug)]
-pub struct HmacQuery<T>(pub T);
+pub struct HmacGuard;
 
-#[derive(serde::Deserialize)]
-struct HmacQueryParams {
-    x_timestamp: String,
-    x_signature: String,
-    // remaining params will be re-serialised for signing
-    #[serde(flatten)]
-    extra: std::collections::BTreeMap<String, String>,
-}
-
-impl<T> FromRequest for HmacQuery<T>
-where
-    T: serde::de::DeserializeOwned + 'static,
-{
+impl FromRequest for HmacGuard {
     type Error = ActixError;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let req_clone = req.clone();
-
+        let req = req.clone();
         Box::pin(async move {
-            let raw_query = req_clone.query_string();
-
-            let params: HmacQueryParams = serde_qs::from_str(raw_query)
-                .map_err(|_| ErrorUnauthorized("Missing or invalid HMAC query params"))?;
-
-            // Rebuild the canonical query string from the non-HMAC params
-            // (sorted, since BTreeMap is ordered) so signing is deterministic.
-            let canonical: String = params
-                .extra
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<_>>()
-                .join("&");
-
-            let data_to_sign = format!("{}.{}", params.x_timestamp, canonical);
-            verify_hmac(&params.x_signature, &params.x_timestamp, &data_to_sign)?;
-
-            // Deserialize only the "real" query params (without HMAC fields)
-            let inner: T = serde_qs::from_str(
-                &params
-                    .extra
-                    .iter()
-                    .map(|(k, v)| format!("{}={}", k, v))
-                    .collect::<Vec<_>>()
-                    .join("&"),
-            )
-            .map_err(actix_web::error::ErrorBadRequest)?;
-
-            Ok(HmacQuery(inner))
+            let signature = req
+                .headers()
+                .get("x-signature")
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| ErrorUnauthorized("Missing x-signature header"))?;
+            let timestamp = req
+                .headers()
+                .get("x-timestamp")
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| ErrorUnauthorized("Missing x-timestamp header"))?;
+            verify_hmac(signature, timestamp, &format!("{}.", timestamp))?;
+            Ok(Self)
         })
-    }
-}
-
-impl<T> std::ops::Deref for HmacQuery<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }

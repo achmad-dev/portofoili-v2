@@ -17,8 +17,10 @@ export const Sidebar: React.FC = () => {
     if (node.type === 'folder') {
       return (
         <div key={nodeId}>
-          <div
-            className="flex items-center py-1 cursor-pointer hover:bg-catppuccin-surface0 text-catppuccin-subtext0 hover:text-catppuccin-text transition-colors"
+          <button
+            type="button"
+            aria-expanded={node.isOpen}
+            className="flex w-full items-center py-1 text-left hover:bg-catppuccin-surface0 text-catppuccin-subtext0 hover:text-catppuccin-text transition-colors"
             style={{ paddingLeft }}
             onClick={() => toggleFolder(nodeId)}
           >
@@ -32,16 +34,18 @@ export const Sidebar: React.FC = () => {
               className={`mr-2 ${node.isOpen ? 'text-catppuccin-blue' : 'text-catppuccin-blue/70'}`}
             />
             <span className="text-sm font-medium">{node.name}</span>
-          </div>
+          </button>
           {node.isOpen &&
             node.children?.map((childId) => renderTree(childId, depth + 1))}
         </div>
       );
     } else {
       return (
-        <div
+        <button
           key={nodeId}
-          className={`flex items-center py-1 cursor-pointer transition-colors ${isActive ? 'bg-catppuccin-surface0 text-white border-l-2 border-catppuccin-blue' : 'text-catppuccin-subtext0 hover:bg-catppuccin-surface0 hover:text-catppuccin-text'}`}
+          type="button"
+          aria-current={isActive ? 'page' : undefined}
+          className={`flex w-full items-center py-1 text-left transition-colors overflow-hidden ${isActive ? 'bg-catppuccin-surface0 text-white border-l-2 border-catppuccin-blue' : 'text-catppuccin-subtext0 hover:bg-catppuccin-surface0 hover:text-catppuccin-text'}`}
           style={{
             paddingLeft: isActive ? `${depth * 16 + 10}px` : paddingLeft,
           }}
@@ -50,26 +54,32 @@ export const Sidebar: React.FC = () => {
           <div className="mr-2">
             <FileIcon name={node.name} type={node.type} />
           </div>
-          <span className="text-sm">{node.name}</span>
-        </div>
+          <span className="text-sm min-w-0 truncate" title={node.name}>
+            {node.name}
+          </span>
+        </button>
       );
     }
   };
 
   return (
     <div
+      inert={!isSidebarOpen}
       className={`
-        absolute md:static z-20 h-full bg-catppuccin-crust border-r border-black/20 transition-all duration-300 ease-in-out flex-shrink-0
-        ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full md:w-0 md:translate-x-0'}
+        absolute top-0 left-0 md:static z-20 h-full w-64 max-w-[85vw] md:max-w-none overflow-hidden bg-catppuccin-crust border-r border-black/20 transition-transform md:transition-[width,transform] duration-300 ease-in-out flex-shrink-0
+        ${isSidebarOpen ? 'translate-x-0 md:w-64' : '-translate-x-full md:w-0 md:translate-x-0'}
       `}
     >
       <div className="p-3 text-xs font-bold text-catppuccin-blue uppercase tracking-wider flex items-center justify-between">
         <span>Explorer</span>
         <span className="text-catppuccin-overlay0 text-[10px]">v2.5.0</span>
       </div>
-      <div className="overflow-y-auto h-[calc(100%-40px)] custom-scrollbar">
+      <nav
+        aria-label="File explorer"
+        className="overflow-y-auto h-[calc(100%-40px)] custom-scrollbar"
+      >
         {renderTree('root')}
-      </div>
+      </nav>
     </div>
   );
 };

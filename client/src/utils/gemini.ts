@@ -35,40 +35,83 @@ export const fetchMessages = async (page: number, limit: number = 20) => {
   const hmacSecret = import.meta.env.VITE_HMAC_SECRET || 'default_secret';
   const timestamp = Date.now().toString();
 
-  // Canonical query (sorted alphabetically, no HMAC fields)
-  // Must match the BTreeMap ordering on the backend
-  const canonical = `limit=${limit}&page=${page}`;
-  const signature = await generateHmacSignature(timestamp, canonical, hmacSecret);
-
-  const url = `${apiUrl}/ai/messages?limit=${limit}&page=${page}&x_timestamp=${timestamp}&x_signature=${signature}`;
-  const response = await fetch(url);
+  const signature = await generateHmacSignature(timestamp, '', hmacSecret);
+  const url = `${apiUrl}/ai/messages?page=${page}&limit=${limit}`;
+  const response = await fetch(url, {
+    headers: { 'x-timestamp': timestamp, 'x-signature': signature },
+  });
   if (!response.ok) throw new Error('Failed to fetch messages');
   return response.json();
 };
 
-export const subscribeToGlobalStream = async (
+export const subscribeToGlobalStream = (
   onEvent: (event: AiEvent) => void
-): Promise<EventSource> => {
+): { close: () => void } => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
   const hmacSecret = import.meta.env.VITE_HMAC_SECRET || 'default_secret';
-  const timestamp = Date.now().toString();
-
-  // No real params on this endpoint, so canonical is empty string
-  const signature = await generateHmacSignature(timestamp, '', hmacSecret);
-
-  const url = `${apiUrl}/ai/messages/stream?x_timestamp=${timestamp}&x_signature=${signature}`;
-  const eventSource = new EventSource(url);
-
-  eventSource.onmessage = (e) => {
+  let eventSource: EventSource | undefined;
+  let ticketRequest: AbortController | undefined;
+  let retryTimer: number | undefined;
+  let retries = 0;
+  let closed = false;
+  const connect = async () => {
+    if (closed) return;
     try {
-      const event: AiEvent = JSON.parse(e.data);
-      onEvent(event);
-    } catch (err) {
-      console.error('Failed to parse global SSE event:', err);
+      const timestamp = Date.now().toString();
+      const signature = await generateHmacSignature(timestamp, '', hmacSecret);
+      if (closed) return;
+      ticketRequest = new AbortController();
+      const ticketResponse = await fetch(`${apiUrl}/auth/ticket`, {
+        method: 'POST',
+        headers: { 'x-timestamp': timestamp, 'x-signature': signature },
+        signal: ticketRequest.signal,
+      });
+      ticketRequest = undefined;
+      if (!ticketResponse.ok)
+        throw new Error(`Ticket request failed (${ticketResponse.status})`);
+      const { ticket } = await ticketResponse.json();
+      if (closed) return;
+      eventSource = new EventSource(
+        `${apiUrl}/ai/messages/stream?ticket=${encodeURIComponent(ticket)}`
+      );
+      eventSource.onmessage = (event) => {
+        try {
+          onEvent(JSON.parse(event.data) as AiEvent);
+        } catch {
+          console.warn('Ignoring malformed chat update');
+        }
+      };
+      eventSource.onopen = () => {
+        retries = 0;
+      };
+      eventSource.onerror = () => {
+        eventSource?.close();
+        if (!closed)
+          retryTimer = window.setTimeout(
+            connect,
+            Math.min(1000 * 2 ** retries++, 15000)
+          );
+      };
+    } catch (error) {
+      ticketRequest = undefined;
+      if (closed) return;
+      console.warn('Chat updates unavailable; retrying.', error);
+      if (!closed)
+        retryTimer = window.setTimeout(
+          connect,
+          Math.min(1000 * 2 ** retries++, 15000)
+        );
     }
   };
-
-  return eventSource;
+  void connect();
+  return {
+    close: () => {
+      closed = true;
+      ticketRequest?.abort();
+      window.clearTimeout(retryTimer);
+      eventSource?.close();
+    },
+  };
 };
 
 export const callGemini = async (prompt: string): Promise<string> => {
@@ -99,33 +142,49 @@ export const streamGemini = async (
   const hmacSecret = import.meta.env.VITE_HMAC_SECRET || 'default_secret';
 
   try {
-    const timestamp = Date.now().toString();
     const bodyStr = JSON.stringify({ prompt });
-    const signature = await generateHmacSignature(
-      timestamp,
-      bodyStr,
-      hmacSecret
-    );
-
-    const response = await fetch(`${apiUrl}/ai/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-timestamp': timestamp,
-        'x-signature': signature,
-      },
-      body: bodyStr,
-    });
+    const send = async () => {
+      const timestamp = Date.now().toString();
+      const signature = await generateHmacSignature(
+        timestamp,
+        bodyStr,
+        hmacSecret
+      );
+      return fetch(`${apiUrl}/ai/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-timestamp': timestamp,
+          'x-signature': signature,
+        },
+        body: bodyStr,
+      });
+    };
+    let response = await send();
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get('Retry-After')) || 1;
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, Math.min(retryAfter, 5) * 1000)
+      );
+      response = await send();
+    }
 
     if (!response.ok) {
       if (response.status === 429) {
         onEvent({
           type: 'Error',
-          content: 'Rate limit exceeded. Try again tomorrow.',
+          content:
+            'This network is sending requests too quickly. Please wait a moment before retrying.',
         });
         return;
       }
-      onEvent({ type: 'Error', content: `API Error: ${response.status}` });
+      onEvent({
+        type: 'Error',
+        content:
+          response.status === 503
+            ? 'The AI service is temporarily busy. Please retry in a moment.'
+            : `The chat service returned an error (${response.status}). Please try again later.`,
+      });
       return;
     }
 
@@ -136,28 +195,47 @@ export const streamGemini = async (
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
+    let pending = '';
+    let completed = false;
+    const dispatch = (frame: string) => {
+      const data = frame
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n');
+      if (!data) return;
+      try {
+        const event = JSON.parse(data) as AiEvent;
+        onEvent(event);
+        if (event.type === 'Response' || event.type === 'Error')
+          completed = true;
+      } catch {
+        onEvent({
+          type: 'Error',
+          content:
+            'The chat service returned an unreadable response. Please try again.',
+        });
+        completed = true;
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr) continue;
-
-          try {
-            const event: AiEvent = JSON.parse(jsonStr);
-            onEvent(event);
-          } catch (e) {
-            console.error('Failed to parse SSE JSON:', jsonStr, e);
-          }
-        }
+      pending += decoder.decode(value, { stream: !done });
+      const frames = pending.split(/\r?\n\r?\n/);
+      pending = frames.pop() ?? '';
+      frames.forEach(dispatch);
+      if (done) {
+        if (pending.trim()) dispatch(pending);
+        break;
       }
     }
+    if (!completed)
+      onEvent({
+        type: 'Error',
+        content:
+          'The connection ended before the assistant replied. Please retry.',
+      });
   } catch (error) {
     console.error('Backend AI Error:', error);
     onEvent({

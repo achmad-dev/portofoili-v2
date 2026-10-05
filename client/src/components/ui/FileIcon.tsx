@@ -23,7 +23,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ name, type }) => {
     );
   if (name === 'copilot.chat')
     return <Bot size={16} className="text-catppuccin-mauve" />;
-  if (type === 'terminal' || name.endsWith('.sh'))
+  if (name.endsWith('.sh'))
     return <TerminalSquare size={16} className="text-catppuccin-green" />;
   if (name.endsWith('.md'))
     return <FileText size={16} className="text-catppuccin-yellow" />;
