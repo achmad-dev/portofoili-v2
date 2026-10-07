@@ -75,7 +75,6 @@ Worked across full-stack development, software design, and cybersecurity risk.
 ## Contact
 
 - **Email:** [alfayaquta@proton.me](mailto:alfayaquta@proton.me)
-- **Phone:** [085745625420](tel:085745625420)
 - **GitHub:** [github.com/achmad-dev](https://github.com/achmad-dev)
 - **LinkedIn:** [linkedin.com/in/achmad-al-fazari](https://www.linkedin.com/in/achmad-al-fazari/)
 - **Location:** Indonesia
