@@ -25,6 +25,8 @@ button {
 
 .workspace {
   position: relative;
+  height: 100vh;
+  height: var(--workspace-height, 100vh);
 }
 .workspace-topbar,
 .workspace-status,
@@ -352,7 +354,7 @@ button {
   padding: 1px 4px;
 }
 .terminal-drawer {
-  position: fixed;
+  position: absolute;
   display: flex;
   flex-direction: column;
   z-index: 35;

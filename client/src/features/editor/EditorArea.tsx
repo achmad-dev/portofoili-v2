@@ -23,7 +23,7 @@ export const EditorArea: React.FC = () => {
   }, [activeFileId]);
 
   return (
-    <div className="flex-1 flex flex-col bg-catppuccin-base relative w-full h-full min-w-0">
+    <div className="flex-1 flex flex-col bg-catppuccin-base relative w-full h-full min-w-0 min-h-0">
       {/* Breadcrumbs / WinBar */}
       {activeFileId && files[activeFileId] && (
         <div className="h-8 flex items-center justify-between px-4 text-xs text-catppuccin-overlay0 border-b border-catppuccin-surface1/50 bg-catppuccin-base flex-shrink-0">
@@ -44,7 +44,7 @@ export const EditorArea: React.FC = () => {
       )}
 
       {/* Content Scroll Area */}
-      <div className="editor-scroll flex-1 overflow-auto custom-scrollbar relative">
+      <div className="editor-scroll flex-1 min-h-0 overflow-auto custom-scrollbar relative">
         <div className="editor-buffer relative min-h-full">
           <Suspense
             fallback={

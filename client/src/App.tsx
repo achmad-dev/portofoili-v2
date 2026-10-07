@@ -24,6 +24,24 @@ function Workspace() {
   const bootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const viewport = window.visualViewport;
+    const syncHeight = () => {
+      document.documentElement.style.setProperty(
+        '--workspace-height',
+        `${Math.round(viewport?.height ?? window.innerHeight)}px`
+      );
+    };
+    syncHeight();
+    viewport?.addEventListener('resize', syncHeight);
+    window.addEventListener('resize', syncHeight);
+    return () => {
+      viewport?.removeEventListener('resize', syncHeight);
+      window.removeEventListener('resize', syncHeight);
+      document.documentElement.style.removeProperty('--workspace-height');
+    };
+  }, []);
+
+  useEffect(() => {
     const scroller = document.querySelector<HTMLElement>('.editor-scroll');
     if (!scroller) return;
     const lenis = new Lenis({
@@ -144,7 +162,7 @@ function Workspace() {
 
   return (
     <div
-      className={`workspace ${isSidebarOpen ? '' : 'sidebar-collapsed'} h-screen w-full flex flex-col overflow-hidden bg-catppuccin-base text-catppuccin-text font-mono`}
+      className={`workspace ${isSidebarOpen ? '' : 'sidebar-collapsed'} w-full flex flex-col overflow-hidden bg-catppuccin-base text-catppuccin-text font-mono`}
     >
       <div className="workspace-topbar">
         <TopBar
