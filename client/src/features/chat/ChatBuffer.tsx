@@ -16,6 +16,7 @@ import { Bot, ChevronRight, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+// Define the shape of a chat message
 interface ChatMessage {
   role: 'system' | 'ai' | 'user';
   text: string;
@@ -24,6 +25,7 @@ interface ChatMessage {
   prompt?: string;
 }
 
+// API response type for chat messages
 interface ApiChatMessage {
   user_prompt: string;
   ai_response: string;

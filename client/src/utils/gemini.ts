@@ -240,7 +240,7 @@ export const streamGemini = async (
     console.error('Backend AI Error:', error);
     onEvent({
       type: 'Error',
-      content: 'Could not connect to the backend AI Copilot.',
+      content: 'Could not connect to the backend AI Gateway.',
     });
   }
 };

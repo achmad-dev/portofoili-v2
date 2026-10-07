@@ -134,6 +134,7 @@ function Workspace() {
     return () => animation.revert();
   }, []);
 
+  // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key.toLowerCase() === 't') {
